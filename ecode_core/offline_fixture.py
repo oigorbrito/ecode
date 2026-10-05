@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 from .archive import Archive, KeepAll, KeepLast
@@ -14,6 +15,35 @@ from .telemetry import JsonlTelemetry
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _repository_provenance(repository_root: Path | None = None) -> dict[str, object]:
+    """Return a commit identity only when it describes the current source tree."""
+    root = repository_root or Path(__file__).resolve().parent.parent
+    try:
+        head_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return {"head_sha": None, "commit_sha": None, "worktree_dirty": None}
+
+    dirty = bool(status.strip())
+    return {
+        "head_sha": head_sha or None,
+        "commit_sha": None if dirty else (head_sha or None),
+        "worktree_dirty": dirty,
+    }
 
 
 class FixtureMutationRunner:
@@ -113,12 +143,15 @@ def run_fixture(
     for source_file in source_files:
         engine_source_hash.update(source_file.relative_to(Path(__file__).parent).as_posix().encode())
         engine_source_hash.update(source_file.read_bytes())
+    repository = _repository_provenance()
     config = {
         "run_id": run_id,
         "seed": seed,
         "iterations": iterations,
         "archive_limit": archive_limit if retention == "keep-last" else None,
-        "repository_commit_sha": None,
+        "repository_head_sha": repository["head_sha"],
+        "repository_commit_sha": repository["commit_sha"],
+        "repository_worktree_dirty": repository["worktree_dirty"],
         "engine_source_sha256": engine_source_hash.hexdigest(),
         "parent_selector": parent_selector,
         "archive_retention": retention,
@@ -133,7 +166,7 @@ def run_fixture(
     artifact_dir = run_dir / "artifacts"
     context = EvaluationContext(
         run_id=run_id,
-        commit_sha=None,
+        commit_sha=repository["commit_sha"],
         config_sha256=config_sha,
         model="fixture-model-v1",
         provider="none-offline-fixture",
@@ -150,7 +183,7 @@ def run_fixture(
     initial = AgentVersion(
         version_id="initial",
         parent_id=None,
-        commit_sha=None,
+        commit_sha=repository["commit_sha"],
         source_tree_sha256=initial_digest,
         config_sha256=config_sha,
         artifact=ArtifactRef(str(initial_path), initial_digest, "text/plain"),

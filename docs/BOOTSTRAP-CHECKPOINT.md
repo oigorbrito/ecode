@@ -34,6 +34,8 @@ The fixture recorded `provider_calls: false`, `repository_commit_sha: null`, eng
 python -m ecode_core.offline_fixture --output-dir .provenance/bootstrap-offline --seed 7 --iterations 3 --parent-selector random --retention keep-all
 ```
 
+The fixture now records `repository_head_sha`, `repository_worktree_dirty`, and `repository_commit_sha`. It emits the commit SHA into run/evaluation records only when the source worktree is clean; a dirty tree retains HEAD as context and leaves the evaluated commit SHA null. This checkpoint predates that fix; a clean-tree run is pending the follow-up commit.
+
 This checkpoint does not qualify any model/provider endpoint, the legacy ECode evaluator, a coding benchmark, or performance. Full test suite and real local model execution were not run. `ECODE_B0` remains pending DGM mechanism integration, a pinned dependency/runtime environment, and an end-to-end evolution cycle through the ECode evaluator.
 
 The imported legacy source snapshot contains trailing whitespace; `git diff --cached --check` reports it across existing source files. Broad whitespace-only rewriting is deferred so the bootstrap checkpoint does not mix mechanical cleanup with the baseline integration.

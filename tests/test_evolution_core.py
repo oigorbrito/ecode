@@ -9,7 +9,7 @@ import pytest
 from ecode_core.archive import Archive, KeepLast
 from ecode_core.adapters.ecode_evaluator import ECodeEvaluator
 from ecode_core.contracts import AgentVersion, ArtifactRef, EvaluationContext, EvaluationResult
-from ecode_core.offline_fixture import run_fixture
+from ecode_core.offline_fixture import _repository_provenance, run_fixture
 from ecode_core.selectors import BestScoreParentSelector
 
 
@@ -134,9 +134,12 @@ def test_offline_fixture_writes_provenance_lineage_and_checksums():
     archive = json.loads((run_dir / "archive.json").read_text(encoding="utf-8"))
     lineage = json.loads((run_dir / "lineage.json").read_text(encoding="utf-8"))
     checksums = (run_dir / "checksums.sha256").read_text(encoding="utf-8").splitlines()
+    repository = _repository_provenance()
 
     assert config["provider_calls"] is False
-    assert config["repository_commit_sha"] is None
+    assert config["repository_head_sha"] == repository["head_sha"]
+    assert config["repository_worktree_dirty"] == repository["worktree_dirty"]
+    assert config["repository_commit_sha"] == repository["commit_sha"]
     assert len(archive["history"]) == 4
     assert len(lineage) == 4
     assert [item["parent_id"] for item in lineage[1:]]
@@ -153,3 +156,15 @@ def test_offline_fixture_writes_provenance_lineage_and_checksums():
         digest, relative_path = line.split("  ", 1)
         assert len(digest) == 64
         assert hashlib.sha256((run_dir / relative_path).read_bytes()).hexdigest() == digest
+
+
+def test_repository_provenance_is_unknown_when_git_is_unavailable(monkeypatch):
+    def git_unavailable(*args, **kwargs):
+        raise FileNotFoundError("git executable unavailable")
+
+    monkeypatch.setattr("ecode_core.offline_fixture.subprocess.run", git_unavailable)
+    assert _repository_provenance() == {
+        "head_sha": None,
+        "commit_sha": None,
+        "worktree_dirty": None,
+    }
