@@ -1,5 +1,7 @@
 import json
 import hashlib
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +13,7 @@ from ecode_core.adapters.ecode_evaluator import ECodeEvaluator
 from ecode_core.contracts import AgentVersion, ArtifactRef, EvaluationContext, EvaluationResult
 from ecode_core.offline_fixture import _repository_provenance, run_fixture
 from ecode_core.selectors import BestScoreParentSelector
+from ecode import choose_selfimproves
 
 
 def _version(version_id, parent_id=None):
@@ -168,3 +171,65 @@ def test_repository_provenance_is_unknown_when_git_is_unavailable(monkeypatch):
         "commit_sha": None,
         "worktree_dirty": None,
     }
+
+
+def test_legacy_best_selection_chooses_highest_scoring_candidate(monkeypatch):
+    output_dir = Path(".provenance") / f"pytest-legacy-selector-{uuid4().hex}"
+    monkeypatch.setattr("ecode.random.random", lambda: 1.0)
+    monkeypatch.setattr("ecode.any_exceeding_context_length", lambda *args: False)
+    for version_id, score, parent_id in (
+        ("initial", 0.1, None),
+        ("child", 0.9, "initial"),
+    ):
+        version_dir = output_dir / version_id
+        version_dir.mkdir(parents=True)
+        metadata = {
+            "parent_commit": parent_id,
+            "overall_performance": {
+                "accuracy_score": score,
+                "total_unresolved_ids": [f"task-{version_id}"],
+                "total_emptypatch_ids": [],
+                "total_resolved_ids": [],
+            },
+        }
+        (version_dir / "metadata.json").write_text(
+            json.dumps(metadata),
+            encoding="utf-8",
+        )
+
+    selected = choose_selfimproves(
+        str(output_dir),
+        ["initial", "child"],
+        1,
+        method="best",
+    )
+
+    assert selected == [("child", "task-child")]
+
+
+def test_ecode_cli_exposes_provider_free_core_fixture():
+    output_dir = Path(".provenance") / f"pytest-cli-fixture-{uuid4().hex}"
+    repository_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "ecode.py",
+            "--offline-fixture",
+            "--fixture-output-dir",
+            str(output_dir),
+            "--fixture-seed",
+            "13",
+            "--fixture-iterations",
+            "2",
+        ],
+        cwd=repository_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    run_dir = output_dir / "offline-fixture-seed-13-parent-random-retention-keep-all"
+    config = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
+
+    assert "Offline fixture evidence:" in result.stdout
+    assert config["provider_calls"] is False
+    assert config["iterations"] == 2

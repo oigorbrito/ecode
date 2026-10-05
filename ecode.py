@@ -7,13 +7,9 @@ import random
 import shutil
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, TimeoutError
 
-from prompts.self_improvement_prompt import find_selfimprove_eval_logs
-from self_improve_step import self_improve
-from utils.common_utils import load_json_file
-from utils.docker_utils import setup_logger
-from utils.evo_utils import load_ecode_metadata, is_compiled_self_improve
-
 def initialize_run(output_dir, prevrun_dir=None, polyglot=False):
+    from utils.common_utils import load_json_file
+
     # Initialize archive
     start_gen_num = 0
     if not prevrun_dir:
@@ -43,6 +39,8 @@ def any_exceeding_context_length(output_dir, commit_id, instance_ids):
     """
     Check if any of the issues have exceeded the context length.
     """
+    from prompts.self_improvement_prompt import find_selfimprove_eval_logs
+
     for instance_id in instance_ids:
         md_logs, _, _, _ = find_selfimprove_eval_logs(instance_id, output_dir, commit_id, filter=False)
         md_log = md_logs[0]
@@ -56,6 +54,8 @@ def choose_selfimproves(output_dir, archive, selfimprove_size, method='random', 
     """
     Choose self-improve attempts for the current generation.
     """
+    from utils.common_utils import load_json_file
+
     selfimprove_entries = []
 
     # Get parent candidates
@@ -105,7 +105,11 @@ def choose_selfimproves(output_dir, archive, selfimprove_size, method='random', 
         parent_commits = random.choices(commits, probabilities, k=selfimprove_size)
     elif method == 'best':
         # Choose parents with the best score
-        sorted_commits = sorted(candidates, key=lambda x: candidates[x]['accuracy_score'])
+        sorted_commits = sorted(
+            candidates,
+            key=lambda x: candidates[x]['accuracy_score'],
+            reverse=True,
+        )
         parent_commits = sorted_commits[:min(selfimprove_size, len(sorted_commits))]
         if len(parent_commits) < selfimprove_size:
             parent_commits.extend(random.choices(parent_commits, k=selfimprove_size - len(parent_commits)))
@@ -146,7 +150,7 @@ def choose_selfimproves(output_dir, archive, selfimprove_size, method='random', 
                 continue
 
             # Choose a random unresolved entry
-            if unresolved_ids == 0:
+            if not unresolved_ids:
                 continue
             entry_ids = unresolved_ids
         entry = random.choice(entry_ids)
@@ -158,6 +162,9 @@ def filter_compiled(run_ids, output_dir, num_swe_issues=[], logger=None):
     """
     Filter out runs that did not compile or have all empty patches.
     """
+    from utils.common_utils import load_json_file
+    from utils.evo_utils import is_compiled_self_improve
+
     run_ids_compiled = []
 
     logger.info(f"num_swe_issues: {num_swe_issues}")
@@ -173,6 +180,8 @@ def get_original_score(output_dir):
     """
     Get the original score from the initial version.
     """
+    from utils.common_utils import load_json_file
+
     metadata = load_json_file(os.path.join(output_dir, "initial", "metadata.json"))
     return metadata["overall_performance"]["accuracy_score"]
 
@@ -198,6 +207,8 @@ def get_full_eval_threshold(output_dir, archive):
     """
     Get the threshold for full evaluation.
     """
+    from utils.common_utils import load_json_file
+
     archive_scores = []
     num_full_eval = sum(len(load_json_file(f"./swe_bench/subsets/{size}.json"))
                        for size in ['small', 'medium', 'big'])
@@ -225,12 +236,31 @@ def get_full_eval_threshold(output_dir, archive):
 
 def main():
     parser = argparse.ArgumentParser(description="ECode evolutionary coding system")
+    parser.add_argument(
+        "--offline-fixture",
+        action="store_true",
+        help="Run the provider-free evolution-core fixture and exit before Docker/provider setup.",
+    )
+    parser.add_argument("--fixture-output-dir", default=".provenance/evolution-core")
+    parser.add_argument("--fixture-seed", type=int, default=7)
+    parser.add_argument("--fixture-iterations", type=int, default=3)
+    parser.add_argument(
+        "--fixture-parent-selector",
+        choices=["random", "best-score"],
+        default="random",
+    )
+    parser.add_argument(
+        "--fixture-retention",
+        choices=["keep-all", "keep-last"],
+        default="keep-all",
+    )
+    parser.add_argument("--fixture-archive-limit", type=int, default=3)
     parser.add_argument("--max_generation", type=int, default=80, help="Maximum number of evolution iterations.")
     parser.add_argument("--selfimprove_size", type=int, default=2, help="Number of self-improvements attempts per ECode generation.")
     parser.add_argument("--selfimprove_workers", type=int, default=2, help="Number of parallel workers for self-improvement attempts.")
     parser.add_argument(
         "--choose_selfimproves_method", type=str, default='score_child_prop',
-        choices=['random', 'score_prop', 'score_child_prop' 'best'],
+        choices=['random', 'score_prop', 'score_child_prop', 'best'],
         help="Method to choose self-improve attempts.",
     )
     parser.add_argument("--continue_from", type=str, default=None, help="Directory to continue the run from.")
@@ -245,6 +275,27 @@ def main():
     # baselines
     parser.add_argument("--run_baseline", type=str, default=None, choices=['no_selfimprove', 'no_open_ended_search'], help="Baseline to run.")
     args = parser.parse_args()
+
+    if args.offline_fixture:
+        from pathlib import Path
+
+        from ecode_core.offline_fixture import run_fixture
+
+        run_dir = run_fixture(
+            Path(args.fixture_output_dir),
+            seed=args.fixture_seed,
+            iterations=args.fixture_iterations,
+            parent_selector=args.fixture_parent_selector,
+            retention=args.fixture_retention,
+            archive_limit=args.fixture_archive_limit,
+        )
+        print(f"Offline fixture evidence: {run_dir}")
+        return
+
+    from self_improve_step import self_improve
+    from utils.common_utils import load_json_file
+    from utils.docker_utils import setup_logger
+    from utils.evo_utils import load_ecode_metadata, is_compiled_self_improve
 
     # Variables for this ECode run
     if not args.continue_from:

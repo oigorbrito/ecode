@@ -71,17 +71,17 @@ python ecode.py
 
 ## Offline evolution-core qualification
 
-Run the local, no-provider fixture with a fixed seed. Parent selection and archive retention can be changed independently:
+Run the local, no-provider fixture through the ECode CLI with a fixed seed. This path exits before importing the provider/Docker execution path. Parent selection and archive retention can be changed independently:
 
 ```bash
-python -m ecode_core.offline_fixture --output-dir .provenance/evolution-core-final-v2 --seed 7 --iterations 3 --parent-selector random --retention keep-all
+python ecode.py --offline-fixture --fixture-output-dir .provenance/evolution-core-final-v2 --fixture-seed 7 --fixture-iterations 3 --fixture-parent-selector random --fixture-retention keep-all
 ```
 
-Use `--parent-selector best-score` or `--retention keep-last --archive-limit N` to select other fixture policies. Scores guide parent selection only; the fixture does not implement a promotion action.
+Use `--fixture-parent-selector best-score` or `--fixture-retention keep-last --fixture-archive-limit N` to select other fixture policies. Scores guide parent selection only; the fixture does not implement a promotion action.
 
 The bundle is written under `.provenance/evolution-core/` and includes `run_config.json`, `archive.json`, `lineage.json`, per-agent/evaluation artifacts, JSONL telemetry, and `checksums.sha256`. It records that the checkout has no commit SHA when that is the case; source/config hashes remain available. The fixture proves only selection → simulated mutation → fixture evaluation → archive/lineage plumbing. It does not qualify an LLM provider, the legacy ECode benchmark harness, or benchmark performance.
 
-Migration status: `ecode_core` now owns the new contracts and loop, and `ECodeEvaluator` adapts an injected ECode harness callback. The existing `ecode.py` CLI still uses its legacy outer loop because `self_improve` currently combines mutation and evaluation; that path has not yet been switched to the new engine. Keep the offline fixture as the no-provider baseline while that boundary is separated.
+Migration status: `ecode_core` owns the new contracts and loop; `ecode.py --offline-fixture` routes the no-provider path through it before Docker/provider imports. `ECodeEvaluator` adapts an injected ECode harness callback, but the normal `ecode.py` CLI still uses the legacy outer loop because `self_improve` currently combines mutation and evaluation. That production path has not yet been switched to the new engine.
 
 ## Empirical migration policy
 
