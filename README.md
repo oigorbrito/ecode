@@ -75,13 +75,14 @@ Run the local, no-provider fixture through the ECode CLI with a fixed seed. This
 
 ```bash
 python ecode.py --offline-fixture --fixture-output-dir .provenance/evolution-core-final-v2 --fixture-seed 7 --fixture-iterations 3 --fixture-parent-selector random --fixture-retention keep-all
+python ecode.py --engine dgm --fixture-output-dir .provenance/evolution-core-dgm-v1 --fixture-seed 7 --fixture-iterations 3
 ```
 
-Use `--fixture-parent-selector best-score` or `--fixture-retention keep-last --fixture-archive-limit N` to select other fixture policies. Scores guide parent selection only; the fixture does not implement a promotion action.
+`--engine dgm` is opt-in and fixture-only; it defaults to `dgm-weighted` parent selection. Use `--fixture-parent-selector best-score` or `--fixture-retention keep-last --fixture-archive-limit N` to select other fixture policies. Scores guide parent selection only; the fixture does not implement a promotion action. Production options such as `--continue_from`, `--polyglot` and `--max_generation` are rejected in this mode. The default `--engine legacy` keeps the production path on the legacy loop. `--offline-fixture` remains as a backwards-compatible fixture entry point.
 
-The bundle is written under `.provenance/evolution-core/` and includes `run_config.json`, `archive.json`, `lineage.json`, per-agent/evaluation artifacts, JSONL telemetry, and `checksums.sha256`. It records that the checkout has no commit SHA when that is the case; source/config hashes remain available. The fixture proves only selection → simulated mutation → fixture evaluation → archive/lineage plumbing. It does not qualify an LLM provider, the legacy ECode benchmark harness, or benchmark performance.
+The bundle is written under `.provenance/evolution-core/` and includes `run_config.json`, `baseline_manifest.json`, `archive.json`, `lineage.json`, per-agent/evaluation artifacts, JSONL telemetry, and `checksums.sha256`. The baseline manifest is marked `NEW_LOCAL_BASELINE` and records code/config/dataset/environment/seed/artifact identity; its dataset is the synthetic fixture specification, not an external benchmark dataset. It records that the checkout has no commit SHA when that is the case; source/config hashes remain available. The fixture proves only selection → simulated mutation → fixture evaluation → archive/lineage plumbing. It does not qualify an LLM provider, the legacy ECode benchmark harness, or benchmark performance.
 
-Migration status: `ecode_core` owns the new contracts and loop; `ecode.py --offline-fixture` routes the no-provider path through it before Docker/provider imports. `ECodeEvaluator` adapts an injected ECode harness callback, but the normal `ecode.py` CLI still uses the legacy outer loop because `self_improve` currently combines mutation and evaluation. That production path has not yet been switched to the new engine.
+Migration status: `ecode_core` owns the new contracts and loop; `ecode.py --engine dgm` routes an opt-in, deterministic fixture path through it before Docker/provider imports. `ecode.py --engine legacy` remains the default and retains the production loop. `ECodeEvaluator` adapts an injected ECode harness callback, but the production mutation/evaluation path is not yet integrated with `EvolutionEngine`.
 
 ## Empirical migration policy
 

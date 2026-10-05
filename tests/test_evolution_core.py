@@ -370,10 +370,12 @@ def test_offline_fixture_writes_provenance_lineage_and_checksums():
     config = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
     archive = json.loads((run_dir / "archive.json").read_text(encoding="utf-8"))
     lineage = json.loads((run_dir / "lineage.json").read_text(encoding="utf-8"))
+    baseline = json.loads((run_dir / "baseline_manifest.json").read_text(encoding="utf-8"))
     checksums = (run_dir / "checksums.sha256").read_text(encoding="utf-8").splitlines()
     repository = _repository_provenance()
 
     assert config["provider_calls"] is False
+    assert config["baseline_origin"] == "NEW_LOCAL_BASELINE"
     assert config["repository_head_sha"] == repository["head_sha"]
     assert config["repository_worktree_dirty"] == repository["worktree_dirty"]
     assert config["repository_commit_sha"] == repository["commit_sha"]
@@ -389,6 +391,42 @@ def test_offline_fixture_writes_provenance_lineage_and_checksums():
         for result in archive["evaluations"].values()
     )
     assert len(checksums) >= 10
+    assert baseline["baseline_origin"] == "NEW_LOCAL_BASELINE"
+    assert baseline["baseline_scope"] == "provider-free-integration-fixture"
+    assert baseline["seed"] == 17
+    assert baseline["dataset"]["source"] == "synthetic deterministic fixture; no external dataset"
+    assert baseline["environment"]["python_version"]
+    assert baseline["environment"]["installed_distributions"]
+    assert baseline["environment"]["installed_distributions_sha256"] == hashlib.sha256(
+        "\n".join(baseline["environment"]["installed_distributions"]).encode("utf-8")
+    ).hexdigest()
+    assert baseline["dataset_sha256"] == hashlib.sha256(
+        (run_dir / baseline["dataset_artifact"]).read_bytes()
+    ).hexdigest()
+    assert baseline["config_sha256"] == hashlib.sha256(
+        (run_dir / "run_config.json").read_bytes()
+    ).hexdigest()
+    assert baseline["environment_artifact"] == "artifacts/provenance/environment.json"
+    assert "artifacts/provenance/source_snapshot/ecode.py" in {
+        artifact["path"] for artifact in baseline["artifacts"]
+    }
+    source_digest = hashlib.sha256()
+    source_root = run_dir / "artifacts/provenance/source_snapshot"
+    for relative in sorted(baseline["code_files"]):
+        encoded_path = relative.encode("utf-8")
+        content = (source_root / relative).read_bytes()
+        source_digest.update(len(encoded_path).to_bytes(8, "big"))
+        source_digest.update(encoded_path)
+        source_digest.update(len(content).to_bytes(8, "big"))
+        source_digest.update(content)
+    assert baseline["code_sha256"] == source_digest.hexdigest()
+    for name, digest in baseline["dependency_manifests_sha256"].items():
+        dependency_path = run_dir / "artifacts/provenance/dependency_manifests" / name
+        assert hashlib.sha256(dependency_path.read_bytes()).hexdigest() == digest
+    assert baseline["qualification"]["real_model_capability"] == "NOT_EXECUTED"
+    assert baseline["qualification"]["performance_gain"] == "NOT_PROVEN"
+    for artifact in baseline["artifacts"]:
+        assert hashlib.sha256((run_dir / artifact["path"]).read_bytes()).hexdigest() == artifact["sha256"]
     for line in checksums:
         digest, relative_path = line.split("  ", 1)
         assert len(digest) == 64
@@ -437,8 +475,19 @@ def test_legacy_best_selection_chooses_highest_scoring_candidate(monkeypatch):
         1,
         method="best",
     )
+    engine_versions = (_version("initial"), _version("child", "initial"))
+    engine_results = {
+        "initial": replace(_result(engine_versions[0]), score=0.1),
+        "child": replace(_result(engine_versions[1]), score=0.9),
+    }
+    engine_selected = BestScoreParentSelector().select(
+        engine_versions,
+        engine_results,
+        rng=None,
+    )
 
     assert selected == [("child", "task-child")]
+    assert engine_selected.version_id == selected[0][0]
 
 
 def test_ecode_cli_exposes_provider_free_core_fixture():
@@ -467,6 +516,104 @@ def test_ecode_cli_exposes_provider_free_core_fixture():
     assert "Offline fixture evidence:" in result.stdout
     assert config["provider_calls"] is False
     assert config["iterations"] == 2
+
+
+def test_ecode_cli_dgm_engine_is_opt_in_fixture_with_dgm_selection():
+    output_dir = Path(".provenance") / f"pytest-cli-dgm-{uuid4().hex}"
+    repository_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "ecode.py",
+            "--engine",
+            "dgm",
+            "--fixture-parent-selector",
+            "dgm-weighted",
+            "--fixture-output-dir",
+            str(output_dir),
+            "--fixture-seed",
+            "19",
+            "--fixture-iterations",
+            "2",
+        ],
+        cwd=repository_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    run_dir = output_dir / "offline-fixture-seed-19-parent-dgm-weighted-retention-keep-all"
+    config = json.loads((run_dir / "run_config.json").read_text(encoding="utf-8"))
+    archive = json.loads((run_dir / "archive.json").read_text(encoding="utf-8"))
+    lineage = json.loads((run_dir / "lineage.json").read_text(encoding="utf-8"))
+    baseline = json.loads((run_dir / "baseline_manifest.json").read_text(encoding="utf-8"))
+
+    assert "DGM fixture evidence:" in result.stdout
+    assert config["execution_mode"] == "dgm-fixture"
+    assert baseline["baseline_id"].startswith("ECODE-DGM-FIXTURE-")
+    assert baseline["baseline_origin"] == "NEW_LOCAL_BASELINE"
+    assert config["parent_selector"] == "dgm-weighted"
+    assert config["provider_calls"] is False
+    assert len(archive["history"]) == 3
+    assert len(lineage) == 3
+    assert [item["parent_id"] for item in lineage[1:]]
+
+
+def test_ecode_cli_rejects_production_options_for_dgm_engine():
+    output_dir = Path(".provenance") / f"pytest-cli-dgm-reject-{uuid4().hex}"
+    repository_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "ecode.py",
+            "--engine",
+            "dgm",
+            "--max_generation",
+            "2",
+            "--fixture-output-dir",
+            str(output_dir),
+        ],
+        cwd=repository_root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "--engine dgm is fixture-only" in result.stderr
+    assert not output_dir.exists()
+
+
+@pytest.mark.parametrize("args", [[], ["--engine", "legacy"]])
+def test_ecode_cli_uses_legacy_production_dispatch_by_default_or_explicitly(monkeypatch, args):
+    import ecode
+    from types import ModuleType
+
+    class LegacyDispatchReached(Exception):
+        pass
+
+    def stop_at_legacy_initialization(*args, **kwargs):
+        raise LegacyDispatchReached
+
+    monkeypatch.setattr(ecode, "initialize_run", stop_at_legacy_initialization)
+    monkeypatch.setattr(ecode.os, "makedirs", lambda *args, **kwargs: None)
+    mutation_module = ModuleType("self_improve_step")
+    mutation_module.self_improve = lambda *args, **kwargs: None
+    common_module = ModuleType("utils.common_utils")
+    common_module.load_json_file = lambda *args, **kwargs: []
+    docker_module = ModuleType("utils.docker_utils")
+    docker_module.setup_logger = lambda *args, **kwargs: None
+    evo_module = ModuleType("utils.evo_utils")
+    evo_module.load_ecode_metadata = lambda *args, **kwargs: None
+    evo_module.is_compiled_self_improve = lambda *args, **kwargs: False
+    for name, module in (
+        ("self_improve_step", mutation_module),
+        ("utils.common_utils", common_module),
+        ("utils.docker_utils", docker_module),
+        ("utils.evo_utils", evo_module),
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+
+    with pytest.raises(LegacyDispatchReached):
+        ecode.main(args)
 
 
 def test_evaluation_phase_consumes_existing_mutation_without_regenerating_it():

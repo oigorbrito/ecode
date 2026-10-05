@@ -234,8 +234,17 @@ def get_full_eval_threshold(output_dir, archive):
 
     return threshold
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description="ECode evolutionary coding system")
+    parser.add_argument(
+        "--engine",
+        choices=["legacy", "dgm"],
+        default="legacy",
+        help=(
+            "Evolution engine. 'legacy' keeps the production loop unchanged; "
+            "'dgm' runs only the provider-free deterministic fixture."
+        ),
+    )
     parser.add_argument(
         "--offline-fixture",
         action="store_true",
@@ -247,7 +256,7 @@ def main():
     parser.add_argument(
         "--fixture-parent-selector",
         choices=["random", "best-score", "dgm-weighted"],
-        default="random",
+        default=None,
     )
     parser.add_argument(
         "--fixture-retention",
@@ -274,22 +283,57 @@ def main():
     parser.add_argument("--no_full_eval", default=False, action='store_true', help="Do not run full evaluation on swe if a node is the top N highest performing.")
     # baselines
     parser.add_argument("--run_baseline", type=str, default=None, choices=['no_selfimprove', 'no_open_ended_search'], help="Baseline to run.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    if args.offline_fixture:
+    if args.engine == "dgm":
+        incompatible_options = []
+        if args.continue_from:
+            incompatible_options.append("--continue_from")
+        if args.polyglot:
+            incompatible_options.append("--polyglot")
+        if args.run_baseline:
+            incompatible_options.append("--run_baseline")
+        if args.max_generation != 80:
+            incompatible_options.append("--max_generation")
+        if args.selfimprove_size != 2:
+            incompatible_options.append("--selfimprove_size")
+        if args.selfimprove_workers != 2:
+            incompatible_options.append("--selfimprove_workers")
+        if args.choose_selfimproves_method != "score_child_prop":
+            incompatible_options.append("--choose_selfimproves_method")
+        if args.update_archive != "keep_all":
+            incompatible_options.append("--update_archive")
+        if args.num_swe_evals != 1:
+            incompatible_options.append("--num_swe_evals")
+        if args.post_improve_diagnose or args.shallow_eval or args.no_full_eval:
+            incompatible_options.append("production evaluation flags")
+        if args.eval_noise != 0.1:
+            incompatible_options.append("--eval_noise")
+        if incompatible_options:
+            parser.error(
+                "--engine dgm is fixture-only; incompatible production option(s): "
+                + ", ".join(incompatible_options)
+            )
+
+    if args.engine == "dgm" or args.offline_fixture:
         from pathlib import Path
 
         from ecode_core.offline_fixture import run_fixture
 
+        parent_selector = args.fixture_parent_selector
+        if parent_selector is None:
+            parent_selector = "dgm-weighted" if args.engine == "dgm" else "random"
         run_dir = run_fixture(
             Path(args.fixture_output_dir),
             seed=args.fixture_seed,
             iterations=args.fixture_iterations,
-            parent_selector=args.fixture_parent_selector,
+            parent_selector=parent_selector,
             retention=args.fixture_retention,
             archive_limit=args.fixture_archive_limit,
+            execution_mode="dgm-fixture" if args.engine == "dgm" else "offline-fixture",
         )
-        print(f"Offline fixture evidence: {run_dir}")
+        engine_label = "DGM fixture" if args.engine == "dgm" else "Offline fixture"
+        print(f"{engine_label} evidence: {run_dir}")
         return
 
     from self_improve_step import self_improve
