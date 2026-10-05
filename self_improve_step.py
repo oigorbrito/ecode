@@ -413,14 +413,27 @@ def self_improve(
     safe_log("Running self-improvement")
     chat_history_file_container = "/ecode/self_evo.md"
     test_description = get_test_description(swerepo=False)
-    env_vars = {
-        "ANTHROPIC_API_KEY": os.getenv('ANTHROPIC_API_KEY'),
-        "AWS_REGION": os.getenv('AWS_REGION'),
-        "AWS_REGION_NAME": os.getenv('AWS_REGION_NAME'),
-        "AWS_ACCESS_KEY_ID": os.getenv('AWS_ACCESS_KEY_ID'),
-        "AWS_SECRET_ACCESS_KEY": os.getenv('AWS_SECRET_ACCESS_KEY'),
-        "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
-    }
+    if os.getenv("ECODE_OPENAI_BASE_URL"):
+        # Select the configured OpenAI-compatible endpoint explicitly and keep
+        # unrelated cloud credentials out of the coding-agent container.
+        env_vars = {
+            name: os.environ[name]
+            for name in (
+                "ECODE_OPENAI_BASE_URL",
+                "ECODE_OPENAI_MODEL",
+                "ECODE_OPENAI_API_KEY",
+            )
+            if name in os.environ
+        }
+    else:
+        env_vars = {
+            "ANTHROPIC_API_KEY": os.getenv('ANTHROPIC_API_KEY'),
+            "AWS_REGION": os.getenv('AWS_REGION'),
+            "AWS_REGION_NAME": os.getenv('AWS_REGION_NAME'),
+            "AWS_ACCESS_KEY_ID": os.getenv('AWS_ACCESS_KEY_ID'),
+            "AWS_SECRET_ACCESS_KEY": os.getenv('AWS_SECRET_ACCESS_KEY'),
+            "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
+        }
     cmd = [
         "timeout", "1800",  # 30min timeout
         "python", "/ecode/coding_agent.py",

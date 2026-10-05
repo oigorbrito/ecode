@@ -1041,3 +1041,42 @@ AFlow-derived search
 ```
 
 Somente depois desse confronto faz sentido aumentar significativamente a superfície do produto.
+
+## 21. Continuidade de runtime local (2026-10-05)
+
+- `docker info` e a execução/remoção de `hello-world` passaram quando o comando teve acesso autorizado ao daemon. Isso qualifica disponibilidade básica do runtime Docker neste host; não qualifica o harness SWE-Bench/Polyglot nem a execução de código gerado. A chamada do coding agent ainda não foi executada com a permissão de Docker necessária.
+- A cópia ativa não tem o cache de avaliação inicial. O cache observado em `ecode-main` continua `UNVERIFIED` e não será usado para comparação histórica.
+- A descoberta `GET /v1/models` do Ollama respondeu dentro do container e listou modelos locais. Quatro completions curtas via `/v1/chat/completions` retornaram HTTP 500 com `llama-server binary not found`; uma chamada adicional por `ollama run` falhou igual e `ollama ps` não listou modelos carregados. Não houve resposta de modelo. A evidência está em `.provenance/local-runtime-smoke-2026-10-05.json`.
+- Foi corrigida a passagem da configuração genérica `ECODE_OPENAI_*` para o container do coding agent. Com `ECODE_OPENAI_BASE_URL`, somente essas configurações são encaminhadas e credenciais cloud não são propagadas por esse caminho. A ausência da variável preserva o caminho de credenciais legado. A alteração ainda não foi executada com o coding agent nem validada por inferência.
+- Próximo gate: reparar/atualizar o runtime Ollama via distribuição oficial ou apontar o adapter para outro servidor OpenAI-compatible local funcional; então repetir a completion smoke e qualificar o adapter dentro do coding agent com orçamento explícito. Em paralelo, definir como criar um seed de avaliação novo sem tratar o cache histórico como confiável. Só depois executar o mesmo protocolo imutável para legacy versus Engine.
+
+Estado atualizado:
+
+```ini
+DOCKER_DAEMON_SMOKE = PASS
+CONTAINER_TO_OLLAMA_DISCOVERY = PASS
+OLLAMA_COMPLETION_SMOKE = BLOCKED_LLAMA_SERVER_MISSING
+LOCAL_AGENT_INFERENCE = NOT_EXECUTED
+HISTORICAL_CACHE_PROVENANCE = UNVERIFIED
+HISTORICAL_BASELINE = NOT_USABLE_FOR_COMPARISON
+REAL_BENCHMARK = NOT_EXECUTED
+PERFORMANCE_GAIN = NOT_PROVEN
+```
+
+## 22. Retentativa Ollama no host (2026-10-05)
+
+- `ollama run qwen2.5-coder:3b` retornou exatamente `OLLAMA_SMOKE_OK`.
+- O endpoint OpenAI-compatible no host respondeu a `GET /v1/models` com HTTP 200 e `POST /v1/chat/completions` com `OLLAMA_SMOKE_OK`; `ollama ps` mostrou o modelo carregado em 100% GPU.
+- A inferência local via CLI e endpoint está qualificada apenas como smoke. Não é validação do coding agent, do benchmark ou de ganho de capacidade.
+- Não foi possível repetir a chamada dentro do container nesta tentativa: acesso ao named pipe do Docker Desktop Linux Engine negado. A falha anterior no container (`llama-server binary not found`) permanece como evidência histórica separada.
+- Resultado atual:
+
+```ini
+OLLAMA_HOST_INFERENCE_SMOKE = PASS
+CONTAINER_OLLAMA_SMOKE = BLOCKED_DOCKER_NAMED_PIPE_PERMISSION_DENIED
+LOCAL_AGENT_INFERENCE = NOT_EXECUTED
+REAL_BENCHMARK = NOT_EXECUTED
+PERFORMANCE_GAIN = NOT_PROVEN
+```
+
+O registro detalhado está em `.provenance/local-runtime-smoke-2026-10-05.json`.

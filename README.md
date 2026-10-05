@@ -24,6 +24,8 @@ export ECODE_OPENAI_API_KEY='local'
 
 Use the server's OpenAI-compatible `/v1` base URL and a model identifier it accepts. Common defaults are `http://host.docker.internal:8080/v1` for llama.cpp server, `http://host.docker.internal:11434/v1` for Ollama, and `http://host.docker.internal:1234/v1` for LM Studio. This single contract is intended for all three; it adds no provider-specific integration. The local endpoint must be reachable from the Docker container running the coding agent. Adapter support is not, by itself, qualification of any server/model combination.
 
+When `ECODE_OPENAI_BASE_URL` is set, the coding-agent container receives only the `ECODE_OPENAI_*` settings; cloud provider credentials are not forwarded on that path. Without it, the existing legacy provider credentials are passed as before. This routes model calls explicitly and does not add a provider fallback.
+
 Verify Docker is available:
 
 ```bash
