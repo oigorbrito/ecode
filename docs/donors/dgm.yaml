@@ -10,7 +10,7 @@ donor:
 
 migration:
   method: selective-port
-  status: PINNED_NOT_IMPORTED
+  status: PARTIALLY_PORTED_FOR_OFFLINE_QUALIFICATION
   planned_mechanisms:
     - archive-and-lineage
     - parent-selection
@@ -34,5 +34,15 @@ migration:
     - evaluation/benchmark_runner.py
     - agent/fm_interface/providers/openai_compatible.py
   evidence_scope:
-    status: UPSTREAM_CLAIM_ONLY
-    local_qualification: NOT_RUN
+    status: SELECTOR_MECHANISM_PORTED; UPSTREAM_BENCHMARK_CLAIMS_NOT_REPRODUCED
+    local_qualification: PROVIDER_FREE_FIXTURE_ONLY
+  imported_mechanism:
+    source_path: archive/parent_selector.py
+    formula: "sigmoid(lambda * (score - alpha_0)) / (1 + valid_child_count)"
+    local_component: ecode_core.selectors.DGMWeightedParentSelector
+    deviations:
+      - single_parent_draw_per_engine_step
+      - child_count_scoped_to_valid_lineage_history_and_selection_members
+      - no_regression_filters
+      - no_elite_or_focus_selection
+      - no_upstream_benchmark_or_acceptance_policy

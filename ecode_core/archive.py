@@ -44,13 +44,14 @@ class Archive:
             raise ValueError("evaluation result agent_id does not match candidate")
         if result.commit_sha != version.commit_sha:
             raise ValueError("evaluation result commit_sha does not match candidate")
-        if result.source_tree_sha256 != version.source_tree_sha256:
-            raise ValueError("evaluation result source hash does not match candidate")
+        if result.candidate_sha256 != version.candidate_sha256:
+            raise ValueError("evaluation result candidate hash does not match candidate")
         if result.config_sha256 != version.config_sha256:
             raise ValueError("evaluation result config hash does not match candidate")
         self.history.append(version)
         self.results[version.version_id] = result
-        self.members = list(self.retention.retain(self.members + [version]))
+        if result.status.upper() not in {"BLOCKED", "INCOMPLETE"} and result.score is not None:
+            self.members = list(self.retention.retain(self.members + [version]))
 
     def add_initial(self, version: AgentVersion, result: EvaluationResult) -> None:
         if self.history:

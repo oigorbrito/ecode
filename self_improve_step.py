@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import shutil
@@ -223,6 +224,67 @@ def run_harness_polyglot(entry, model_name_or_path, patch_files, num_evals, outp
         metadata['overall_performance_deep'] = overall_performance
         safe_log("End of evaluation more")
 
+
+def evaluate_self_improve(
+    *,
+    entry,
+    model_patch_file,
+    patch_files,
+    num_evals,
+    output_dir,
+    metadata,
+    run_id,
+    test_more_threshold,
+    test_task_list,
+    test_task_list_more,
+    polyglot=False,
+    post_improve_diagnose=False,
+    parent_commit="initial",
+    root_dir=None,
+    out_dir_base=None,
+):
+    """Evaluate an already-created mutation and persist its legacy metadata.
+
+    Mutation generation owns producing ``model_patch_file``. This function owns
+    only benchmark execution/reporting; the benchmark harness remains
+    responsible for its existing isolation boundary.
+    """
+    model_name_or_path = run_id
+    from ecode_core.legacy_evaluation import run_benchmark_evaluation
+
+    harness_runner = run_harness_polyglot if polyglot else run_harness_swe
+    metadata = run_benchmark_evaluation(
+        model_patch_file=model_patch_file,
+        metadata=metadata,
+        harness_runner=harness_runner,
+        sandbox_unavailable_error=SandboxUnavailableError,
+        harness_args=(
+            entry, model_name_or_path, patch_files, num_evals, output_dir,
+            metadata, run_id, test_more_threshold, test_task_list,
+            test_task_list_more,
+        ),
+        log=safe_log,
+        persist=lambda result: save_metadata(result, output_dir),
+    )
+    if metadata.get("status") == "BLOCKED":
+        return metadata
+
+    if post_improve_diagnose:
+        safe_log("Diagnosing the self-improvement")
+        metadata['is_compiled'] = is_compiled_self_improve(metadata)
+        if metadata['is_compiled']:
+            safe_log("The self-improvement succeeded compilation")
+            metadata['improvement_diagnosis'] = diagnose_improvement(
+                entry, parent_commit, root_dir, model_patch_file,
+                out_dir_base, run_id, patch_files=patch_files,
+            )
+        else:
+            safe_log("The self-improvement did not compile")
+            metadata['improvement_diagnosis'] = "Fail to complied. Ignore this."
+
+    save_metadata(metadata, output_dir)
+    return metadata
+
 def self_improve(
     parent_commit='initial',  # 'initial' if starting from original ecode, else the run_id
     output_dir='output_selfimprove/',
@@ -237,7 +299,9 @@ def self_improve(
     full_eval_threshold=None,
     # Run baseline
     run_baseline=None,
-    polyglot=False
+    polyglot=False,
+    mutation_only=False,
+    run_id=None,
 ):  
 
     global dataset
@@ -252,7 +316,7 @@ def self_improve(
     # Variables for this self-improvement attempt
     metadata = {}
     root_dir = os.path.abspath('./')  # root_dir should be /ecode
-    run_id = datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    run_id = run_id or datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     out_dir_base = output_dir  # out_dir_base should be /ecode/output_selfimprove/ or /ecode/output_ecode/{ecode_run_id}/
     output_dir = os.path.join(root_dir, f"{output_dir}/{run_id}/")
     os.makedirs(output_dir, exist_ok=True)
@@ -396,47 +460,32 @@ def self_improve(
     # Stop and remove the container
     cleanup_container(container)
 
-    # Evaluate the performance of the self-improvement
-    model_patch_exists = os.path.exists(model_patch_file)
-    metadata['model_patch_exists'] = model_patch_exists
-    model_patch_notempty = os.path.getsize(model_patch_file) > 0
-    metadata['model_patch_notempty'] = model_patch_notempty
-    model_name_or_path = run_id
-    if model_patch_exists and model_patch_notempty:
-        try:
-            if not polyglot:
-                run_harness_swe(entry, model_name_or_path, patch_files, num_evals, output_dir, metadata, run_id, test_more_threshold, test_task_list, test_task_list_more)
-            else:
-                run_harness_polyglot(entry, model_name_or_path, patch_files, num_evals, output_dir, metadata, run_id, test_more_threshold, test_task_list, test_task_list_more)
-        except SandboxUnavailableError as e:
-            metadata['status'] = 'BLOCKED'
-            metadata['blocked_reason'] = 'SANDBOX_UNAVAILABLE'
-            safe_log(str(e))
-            save_metadata(metadata, output_dir)
-            return metadata
-        except Exception as e:
-            safe_log(f"Error while evaluating the self-improvement: {e}")
+    if mutation_only:
+        metadata['status'] = 'MUTATION_READY'
+        metadata['model_patch_file'] = os.path.abspath(model_patch_file)
+        with open(model_patch_file, 'rb') as patch_stream:
+            metadata['model_patch_sha256'] = hashlib.sha256(patch_stream.read()).hexdigest()
+        save_metadata(metadata, output_dir)
+        return metadata
 
-    # Post-self-improvement diagnosis
-    if post_improve_diagnose:
-        safe_log("Diagnosing the self-improvement")
-        metadata['is_compiled'] = is_compiled_self_improve(metadata)
-        if metadata['is_compiled']:
-            safe_log("The self-improvement succeed to be complied")
-            improvement_diagnosis = diagnose_improvement(
-                entry, parent_commit, root_dir,
-                model_patch_file, out_dir_base, run_id,
-                patch_files=patch_files,
-            )
-            metadata['improvement_diagnosis'] = improvement_diagnosis
-            safe_log(f"Improvement diagnosis: {improvement_diagnosis}")
-        else:
-            safe_log("The self-improvement fail to be complied")
-            metadata['improvement_diagnosis'] = "Fail to complied. Ignore this."
-
-    # Save metadata of this self-improvement attempt
-    save_metadata(metadata, output_dir)
-    return metadata
+    # The mutation phase ends here; evaluation consumes its patch as input.
+    return evaluate_self_improve(
+        entry=entry,
+        model_patch_file=model_patch_file,
+        patch_files=patch_files,
+        num_evals=num_evals,
+        output_dir=output_dir,
+        metadata=metadata,
+        run_id=run_id,
+        test_more_threshold=test_more_threshold,
+        test_task_list=test_task_list,
+        test_task_list_more=test_task_list_more,
+        polyglot=polyglot,
+        post_improve_diagnose=post_improve_diagnose,
+        parent_commit=parent_commit,
+        root_dir=root_dir,
+        out_dir_base=out_dir_base,
+    )
 
 def main():
     parser = argparse.ArgumentParser(description="Self-improvement step for the repository.")

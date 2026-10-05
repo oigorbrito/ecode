@@ -246,7 +246,7 @@ def main():
     parser.add_argument("--fixture-iterations", type=int, default=3)
     parser.add_argument(
         "--fixture-parent-selector",
-        choices=["random", "best-score"],
+        choices=["random", "best-score", "dgm-weighted"],
         default="random",
     )
     parser.add_argument(

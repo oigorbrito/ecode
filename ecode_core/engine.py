@@ -3,7 +3,15 @@ from __future__ import annotations
 import random
 
 from .archive import Archive
-from .contracts import AgentVersion, EvaluationContext, Evaluator, MutationRunner, ParentSelector, TelemetrySink
+from .contracts import (
+    AgentVersion,
+    EvaluationContext,
+    EvaluationResult,
+    Evaluator,
+    MutationRunner,
+    ParentSelector,
+    TelemetrySink,
+)
 from .telemetry import NullTelemetry
 
 
@@ -28,6 +36,10 @@ class EvolutionEngine:
 
     def initialize(self, initial: AgentVersion) -> None:
         result = self.evaluator.evaluate(initial, self.context)
+        self.initialize_with_result(initial, result)
+
+    def initialize_with_result(self, initial: AgentVersion, result: EvaluationResult) -> None:
+        """Seed the run from a matching evaluation already present in cache."""
         self.archive.add_initial(initial, result)
         self.telemetry.emit({
             "event": "evaluation_completed",
@@ -38,10 +50,17 @@ class EvolutionEngine:
         })
 
     def step(self, iteration: int) -> AgentVersion:
+        child_counts = {version.version_id: 0 for version in self.archive.members}
+        for candidate in self.archive.history:
+            result = self.archive.results[candidate.version_id]
+            is_valid = result.score is not None and result.status.upper() not in {"BLOCKED", "INCOMPLETE"}
+            if is_valid and candidate.parent_id in child_counts:
+                child_counts[candidate.parent_id] += 1
         parent = self.parent_selector.select(
             self.archive.members,
             self.archive.results,
             rng=self.rng,
+            child_counts=child_counts,
         )
         child_id = f"{self.context.run_id}-iter-{iteration:04d}"
         self.telemetry.emit({
@@ -53,6 +72,7 @@ class EvolutionEngine:
         })
         child = self.mutation_runner.mutate(
             parent,
+            parent_result=self.archive.results[parent.version_id],
             child_id=child_id,
             context=self.context,
         )

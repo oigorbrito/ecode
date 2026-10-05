@@ -18,7 +18,7 @@ class AgentVersion:
     version_id: str
     parent_id: Optional[str]
     commit_sha: Optional[str]
-    source_tree_sha256: str
+    candidate_sha256: str
     config_sha256: str
     artifact: ArtifactRef
     attributes: Mapping[str, Any] = field(default_factory=dict)
@@ -44,7 +44,7 @@ class EvaluationResult:
     score: Optional[float]
     status: str
     commit_sha: Optional[str]
-    source_tree_sha256: str
+    candidate_sha256: str
     config_sha256: str
     model: str
     provider: str
@@ -58,7 +58,7 @@ class EvaluationResult:
         required = {
             "evaluation_id": self.evaluation_id,
             "agent_id": self.agent_id,
-            "source_tree_sha256": self.source_tree_sha256,
+            "candidate_sha256": self.candidate_sha256,
             "config_sha256": self.config_sha256,
             "model": self.model,
             "provider": self.provider,
@@ -78,6 +78,7 @@ class ParentSelector(Protocol):
         results: Mapping[str, EvaluationResult],
         *,
         rng: Any,
+        child_counts: Optional[Mapping[str, int]] = None,
     ) -> AgentVersion: ...
 
 
@@ -86,6 +87,7 @@ class MutationRunner(Protocol):
         self,
         parent: AgentVersion,
         *,
+        parent_result: EvaluationResult,
         child_id: str,
         context: EvaluationContext,
     ) -> AgentVersion: ...

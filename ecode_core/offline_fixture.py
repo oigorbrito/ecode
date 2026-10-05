@@ -9,7 +9,7 @@ from pathlib import Path
 from .archive import Archive, KeepAll, KeepLast
 from .contracts import AgentVersion, ArtifactRef, EvaluationContext, EvaluationResult
 from .engine import EvolutionEngine
-from .selectors import BestScoreParentSelector, RandomParentSelector
+from .selectors import BestScoreParentSelector, DGMWeightedParentSelector, RandomParentSelector
 from .telemetry import JsonlTelemetry
 
 
@@ -49,7 +49,7 @@ def _repository_provenance(repository_root: Path | None = None) -> dict[str, obj
 class FixtureMutationRunner:
     """Deterministic mutation simulation; makes no model or provider calls."""
 
-    def mutate(self, parent, *, child_id, context):
+    def mutate(self, parent, *, parent_result, child_id, context):
         parent_text = Path(parent.artifact.path).read_text(encoding="utf-8")
         next_quality = int(parent.attributes["fixture_quality"]) + 1
         content = f"{parent_text}\nfixture_mutation={child_id}\nquality={next_quality}\n"
@@ -62,7 +62,7 @@ class FixtureMutationRunner:
             version_id=child_id,
             parent_id=parent.version_id,
             commit_sha=context.commit_sha,
-            source_tree_sha256=digest,
+            candidate_sha256=digest,
             config_sha256=context.config_sha256,
             artifact=ArtifactRef(str(artifact_path), digest, "text/plain"),
             attributes={"fixture_quality": next_quality},
@@ -81,7 +81,7 @@ class FixtureEvaluator:
             "score": score,
             "status": "FIXTURE_PASS",
             "commit_sha": agent.commit_sha,
-            "source_tree_sha256": agent.source_tree_sha256,
+            "candidate_sha256": agent.candidate_sha256,
             "config_sha256": context.config_sha256,
             "model": context.model,
             "provider": context.provider,
@@ -100,7 +100,7 @@ class FixtureEvaluator:
             score=score,
             status="FIXTURE_PASS",
             commit_sha=agent.commit_sha,
-            source_tree_sha256=agent.source_tree_sha256,
+            candidate_sha256=agent.candidate_sha256,
             config_sha256=context.config_sha256,
             model=context.model,
             provider=context.provider,
@@ -126,8 +126,8 @@ def run_fixture(
 ) -> Path:
     if iterations < 1:
         raise ValueError("iterations must be at least one")
-    if parent_selector not in {"random", "best-score"}:
-        raise ValueError("parent_selector must be random or best-score")
+    if parent_selector not in {"random", "best-score", "dgm-weighted"}:
+        raise ValueError("parent_selector must be random, best-score, or dgm-weighted")
     if retention not in {"keep-all", "keep-last"}:
         raise ValueError("retention must be keep-all or keep-last")
     if archive_limit < 1:
@@ -184,14 +184,18 @@ def run_fixture(
         version_id="initial",
         parent_id=None,
         commit_sha=repository["commit_sha"],
-        source_tree_sha256=initial_digest,
+        candidate_sha256=initial_digest,
         config_sha256=config_sha,
         artifact=ArtifactRef(str(initial_path), initial_digest, "text/plain"),
         attributes={"fixture_quality": 0},
     )
 
     archive_policy = KeepAll() if retention == "keep-all" else KeepLast(archive_limit)
-    selector = RandomParentSelector() if parent_selector == "random" else BestScoreParentSelector()
+    selector = {
+        "random": RandomParentSelector,
+        "best-score": BestScoreParentSelector,
+        "dgm-weighted": DGMWeightedParentSelector,
+    }[parent_selector]()
     archive = Archive(archive_policy)
     engine = EvolutionEngine(
         archive=archive,
@@ -219,7 +223,11 @@ def main(argv=None):
     parser.add_argument("--output-dir", type=Path, default=Path(".provenance/evolution-core"))
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--iterations", type=int, default=3)
-    parser.add_argument("--parent-selector", choices=("random", "best-score"), default="random")
+    parser.add_argument(
+        "--parent-selector",
+        choices=("random", "best-score", "dgm-weighted"),
+        default="random",
+    )
     parser.add_argument("--retention", choices=("keep-all", "keep-last"), default="keep-all")
     parser.add_argument("--archive-limit", type=int, default=3)
     args = parser.parse_args(argv)

@@ -994,6 +994,10 @@ Este estado é uma fotografia do checkout, não uma aprovação de maturidade ne
 | Runtime local | Há adapter OpenAI-compatible genérico e fixture sem provider | Adapter não qualifica llama.cpp, Ollama ou LM Studio. |
 | Loop integrado | `ecode_core` e fixture existem; `ecode.py --offline-fixture` usa o núcleo novo, mas a execução normal ainda usa o loop legado | O critério para chamar o ciclo integrado de B0 ainda não foi satisfeito. |
 | Evidência offline | Fixture registra configuração, hashes, archive, lineage e telemetria | Evidência de plumbing apenas; não mede capacidade de modelo nem benchmark real. |
+| Separação mutation/evaluation | Harness evaluation foi extraído para `ecode_core.legacy_evaluation`; `ECodeEvaluator` valida artefatos e não atribui score a `BLOCKED`/`INCOMPLETE`; archive mantém esses resultados no histórico, fora do pool de pais | Testes focados passam; mutação e avaliação não estão ainda orquestradas por `EvolutionEngine` na CLI normal. |
+| Adapter de mutação | `self_improve(..., mutation_only=True)` devolve patch e SHA-256 sem avaliar; `ECodeMutationRunner` cria `AgentVersion` com `candidate_sha256` | Contrato e callback testados; chamada real Docker/agent e integração CLI não executadas. |
+| Bootstrap de avaliação cacheada | `initialize_with_result()` sem reexecução, `ECodeEvaluator.from_metadata()` e entrega de `parent_result` ao `MutationRunner` | APIs e callbacks testados; cache de baseline não encontrado nesta cópia, portanto CLI segue sem integração ao Engine. |
+| Seletor DGM ponderado | Port seletivo de `sigmoid(lambda * (score - alpha_0)) / (1 + valid_child_count)` em `DGMWeightedParentSelector`; opt-in no fixture | Gate local passou em duas execuções provider-free semanticamente idênticas; nenhum benchmark DGM foi reproduzido nem há promoção para a CLI real. |
 
 ### Ordem de trabalho conciliada
 
@@ -1005,6 +1009,10 @@ Este estado é uma fotografia do checkout, não uma aprovação de maturidade ne
 6. Para cada donor, exigir pin, licença, evidência upstream revisada, hipótese, baseline congelado, comparação controlada, held-out/regressão e custo de engenharia antes da decisão.
 
 Até esses gates serem satisfeitos, o estado é `BOOTSTRAP`; nenhum mecanismo de donor está `PROMOTED` e nenhum número upstream é resultado ECode. A revisão consultada não contém arquivo de licença; essa condição e a instrução do usuário para prosseguir ficam registradas como proveniência técnica interna.
+
+### Progresso incremental
+
+O primeiro recorte da separação entre mutação e avaliação está implementado: `self_improve()` continua gerando a mutação, depois entrega o patch a `evaluate_self_improve()`, que usa `ecode_core.legacy_evaluation.run_benchmark_evaluation` para chamar o harness legado. O modo `mutation_only` retorna o patch sem avaliar, e `ECodeMutationRunner` o adapta ao contrato `MutationRunner` com hash de candidato (sem alegar hash de source tree). `EvolutionEngine.initialize_with_result()` e `ECodeEvaluator.from_metadata()` permitem carregar baseline já avaliado sem rodar benchmark novamente; o resultado do pai chega ao mutator para escolha contextual da tarefa. O seletor DGM ponderado foi portado seletivamente e passou duas execuções idênticas do fixture com hashes, avaliações e lineage reproduzíveis. `ECodeEvaluator` converte metadados em `EvaluationResult`, verifica o hash do artefato candidato e não dá score a execuções `BLOCKED` ou `INCOMPLETE`. O `Archive` conserva esses resultados para lineage, mas não os oferece como pais. Harnesses simulados mantêm `SANDBOX_UNAVAILABLE = BLOCKED`. O cache de baseline não foi encontrado nesta cópia. Ainda falta ligar os adapters ao loop normal da CLI; o caminho real com Docker/provider não foi executado nem qualificado.
 
 Primeiro marco:
 
