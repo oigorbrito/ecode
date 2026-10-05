@@ -1,0 +1,38 @@
+donor:
+  repository: https://github.com/lemoz/darwin-godel-machine
+  ref: refs/heads/main
+  revision: c885363a59681cb8589fcc2ad5bde4eb3915140e
+  observed_at: 2026-10-05
+  license_file: NOT_FOUND
+  user_authorized_local_copy: true
+  visible_product_attribution_required: false
+  pin_purpose: internal-source-traceability
+
+migration:
+  method: selective-port
+  status: PINNED_NOT_IMPORTED
+  planned_mechanisms:
+    - archive-and-lineage
+    - parent-selection
+    - mutation-orchestration-boundary
+    - evaluation-orchestration-boundary
+    - OpenAI-compatible-model-adapter
+    - evolution-telemetry
+  excluded_from_automatic_migration:
+    - provider-specific-configuration
+    - cloud-workers
+    - host-execution-fallback
+    - sandbox-policy
+    - benchmark-choice
+    - acceptance-or-promotion-authority
+  source_paths_to_review:
+    - archive/agent_archive.py
+    - archive/parent_selector.py
+    - dgm_controller.py
+    - self_modification/implementation.py
+    - evaluation/agent_validator.py
+    - evaluation/benchmark_runner.py
+    - agent/fm_interface/providers/openai_compatible.py
+  evidence_scope:
+    status: UPSTREAM_CLAIM_ONLY
+    local_qualification: NOT_RUN

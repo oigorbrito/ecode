@@ -6,11 +6,12 @@
 2. Work on a branch rather than committing directly to the primary branch.
 3. Keep changes scoped and reviewable.
 4. Add or update tests when behavior changes.
-5. Run the canonical verification locally:
+5. Run the checks relevant to the change. The current project checks are:
 
 ```bash
-python scripts/harness.py
-python -m unittest discover -s tests -v
+ruff check .
+python -m compileall -q analysis coding_agent.py coding_agent_polyglot.py ecode.py llm.py llm_withtools.py self_improve_step.py swe_bench polyglot prompts tools utils test_swebench.py
+python -m pytest -q
 ```
 
 6. Open a pull request describing the change and the evidence executed.
@@ -22,4 +23,4 @@ Changes should preserve documented interfaces and invariants, avoid introducing 
 
 ## Test policy
 
-At repository bootstrap, tests may be minimal. As the project matures, the applicable OSPS target level controls whether automated tests in CI, documented test execution, and test-update policy become mandatory. See `docs/MATURITY.md`.
+Do not report provider-backed or benchmark qualification from unit tests alone. Docker, provider credentials, local model availability, benchmark data, and hosted CI are separate evidence scopes; report each as `NOT_RUN`, `BLOCKED`, or `PASS_WITH_SCOPE` as appropriate.

@@ -1,20 +1,26 @@
-# Agent Instructions
+# Repository guidance
 
-These instructions are a repository adapter built on top of externally defined controls. They are **not themselves an OpenSSF, NIST or DORA requirement**.
+## Project
 
-Before changing code or documentation:
+- ECode is an experimental Python system for evolutionary coding agents and benchmark evaluation. See `README.md` for setup and run instructions.
+- Python support and CI target Python 3.10.
+- Main areas: `coding_agent.py`, `ecode.py`, `swe_bench/`, `polyglot/`, `tools/`, and `tests/`.
 
-1. Read `policy/project-state.json`, `docs/MATURITY.md`, `docs/ARCHITECTURE.md`, and `docs/TESTING.md`.
-2. Run `python scripts/harness.py` before claiming repository readiness.
-3. Never convert missing, stale, inaccessible, or unexecuted evidence into `PASS`.
-4. Use these result meanings exactly:
-   - `PASS`: evidence was found or executed and satisfies the local check.
-   - `GAP`: an applicable local requirement is not satisfied.
-   - `UNKNOWN_EXTERNAL`: the requirement depends on repository/platform state that this harness cannot prove locally.
-   - `NOT_APPLICABLE`: the documented trigger is not currently true.
-5. Product labels such as `prototype`, `MVP`, or `production` are descriptive only. They do not promote OSPS maturity.
-6. If a release is observed (state file or Git tag), run the release-conditioned checks and report every newly applicable gap.
-7. If the number of maintainers or user population materially changes, flag `MATURITY_REASSESSMENT_REQUIRED`; do not silently promote the target level.
-8. Do not add a security, release, architecture, or compliance claim unless the supporting evidence is versioned or externally verifiable.
-9. Prefer the smallest change that closes a documented gap. Do not add controls merely for appearance.
-10. After material project changes, rerun the harness and tests.
+## Working in this repository
+
+- Follow the existing module structure and keep changes focused on the requested behavior.
+- Treat model-generated code, patches, benchmark repositories, and model output as untrusted. Review execution paths and preserve isolation around Docker-backed evaluation; do not run generated code directly on the host.
+- Do not add credentials, local evaluation caches, or generated benchmark output to version control.
+- Use the existing tests and CI checks; do not claim provider-backed or benchmark qualification from unit tests alone.
+
+## Validation
+
+CI uses Python 3.10 and runs:
+
+```bash
+ruff check .
+python -m compileall -q analysis coding_agent.py coding_agent_polyglot.py ecode.py llm.py llm_withtools.py self_improve_step.py swe_bench polyglot prompts tools utils test_swebench.py
+python -m pytest -q
+```
+
+Run the relevant checks for the change and report any checks that were not run or were blocked by environment requirements such as Docker, API credentials, or benchmark data.
