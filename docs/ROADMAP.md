@@ -992,7 +992,7 @@ Este estado é uma fotografia do checkout, não uma aprovação de maturidade ne
 | Licença DGM | Nenhum `LICENSE`, `COPYING` ou `NOTICE` foi encontrado na árvore da revisão consultada | Ausência registrada. Por instrução do usuário, a adaptação seletiva pode prosseguir; o pin é rastreabilidade técnica interna, sem crédito visível obrigatório. |
 | Sandbox | O caminho atual exige Docker e registra bloqueio quando indisponível | Hardening local; não é comportamento atribuído ao DGM. |
 | Runtime local | Há adapter OpenAI-compatible genérico e fixture sem provider | Adapter não qualifica llama.cpp, Ollama ou LM Studio. |
-| Loop integrado | `ecode_core` e fixture existem, mas a CLI `ecode.py` ainda usa o loop legado | O critério para chamar o ciclo integrado de B0 ainda não foi satisfeito. |
+| Loop integrado | `ecode_core` e fixture existem; `ecode.py --offline-fixture` usa o núcleo novo, mas a execução normal ainda usa o loop legado | O critério para chamar o ciclo integrado de B0 ainda não foi satisfeito. |
 | Evidência offline | Fixture registra configuração, hashes, archive, lineage e telemetria | Evidência de plumbing apenas; não mede capacidade de modelo nem benchmark real. |
 
 ### Ordem de trabalho conciliada

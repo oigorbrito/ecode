@@ -34,7 +34,17 @@ The fixture recorded `provider_calls: false`, `repository_commit_sha: null`, eng
 python -m ecode_core.offline_fixture --output-dir .provenance/bootstrap-offline --seed 7 --iterations 3 --parent-selector random --retention keep-all
 ```
 
-The fixture now records `repository_head_sha`, `repository_worktree_dirty`, and `repository_commit_sha`. It emits the commit SHA into run/evaluation records only when the source worktree is clean; a dirty tree retains HEAD as context and leaves the evaluated commit SHA null. This checkpoint predates that fix; a clean-tree run is pending the follow-up commit.
+The fixture now records `repository_head_sha`, `repository_worktree_dirty`, and `repository_commit_sha`. It emits the commit SHA into run/evaluation records only when the source worktree is clean; a dirty tree retains HEAD as context and leaves the evaluated commit SHA null.
+
+## Follow-up checkpoint verification
+
+- Code revision exercised: `a96564ba78141d69bbe56eceefb0481e31fc6a42`
+- Clean-tree fixture bundle: `.provenance/bootstrap-cli-clean/offline-fixture-seed-7-parent-random-retention-keep-all`
+- `repository_worktree_dirty`: `false`; `repository_commit_sha`: `a96564ba78141d69bbe56eceefb0481e31fc6a42`
+- `engine_source_sha256`: `586a4aa4a4ac9a12759410280c4ffaf06de4bebb454bee549749ecf9bf6ee70b`
+- `checksums.sha256` SHA-256: `6f63539fc421a82b250f98a1fc89e8d4db87ef5237a2f80ba344d702627c3c72`
+- Targeted core/adapter/CLI/selector tests: `11 passed`; Ruff and `compileall` passed.
+- The main CLI exposes the offline fixture path; normal benchmark execution remains on the legacy outer loop pending the mutation/evaluation split.
 
 This checkpoint does not qualify any model/provider endpoint, the legacy ECode evaluator, a coding benchmark, or performance. Full test suite and real local model execution were not run. `ECODE_B0` remains pending DGM mechanism integration, a pinned dependency/runtime environment, and an end-to-end evolution cycle through the ECode evaluator.
 
