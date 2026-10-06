@@ -285,6 +285,23 @@ def evaluate_self_improve(
     save_metadata(metadata, output_dir)
     return metadata
 
+def describe_mutation_patch(model_patch_file):
+    """Describe factual exported patch state without evaluation or promotion."""
+    try:
+        with open(model_patch_file, 'rb') as stream:
+            patch_bytes = stream.read()
+        patch_text = patch_bytes.decode('utf-8')
+    except (OSError, UnicodeError) as exc:
+        return {'status': 'PATCH_EMPTY', 'mutation_diagnostic': {
+            'classification': 'PATCH_EMPTY', 'patch_state': 'UNREADABLE', 'error': str(exc)}}
+    if not patch_text.strip():
+        return {'status': 'PATCH_EMPTY', 'mutation_diagnostic': {
+            'classification': 'PATCH_EMPTY', 'patch_state': 'EMPTY'}}
+    return {'status': 'MUTATION_READY',
+            'model_patch_file': os.path.abspath(model_patch_file),
+            'model_patch_sha256': hashlib.sha256(patch_bytes).hexdigest()}
+
+
 def self_improve(
     parent_commit='initial',  # 'initial' if starting from original ecode, else the run_id
     output_dir='output_selfimprove/',
@@ -302,7 +319,7 @@ def self_improve(
     polyglot=False,
     mutation_only=False,
     run_id=None,
-):  
+):
 
     global dataset
     if polyglot:
@@ -422,6 +439,7 @@ def self_improve(
                 "ECODE_OPENAI_BASE_URL",
                 "ECODE_OPENAI_MODEL",
                 "ECODE_OPENAI_API_KEY",
+                "ECODE_OLLAMA_API_BASE_URL",
             )
             if name in os.environ
         }
@@ -465,6 +483,9 @@ def self_improve(
                 raise Exception("Model patch file is empty")
     except Exception as e:
         safe_log(f"Failed to read model patch file: {str(e)}")
+        if mutation_only:
+            metadata.update({'status': 'PATCH_EMPTY', 'mutation_diagnostic': {
+                'classification': 'PATCH_EMPTY', 'error': str(e)}})
         save_metadata(metadata, output_dir)
         return metadata
 
@@ -474,10 +495,7 @@ def self_improve(
     cleanup_container(container)
 
     if mutation_only:
-        metadata['status'] = 'MUTATION_READY'
-        metadata['model_patch_file'] = os.path.abspath(model_patch_file)
-        with open(model_patch_file, 'rb') as patch_stream:
-            metadata['model_patch_sha256'] = hashlib.sha256(patch_stream.read()).hexdigest()
+        metadata.update(describe_mutation_patch(model_patch_file))
         save_metadata(metadata, output_dir)
         return metadata
 

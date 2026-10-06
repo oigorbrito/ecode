@@ -274,7 +274,6 @@ def harness(
     """
     # Load the locally frozen and integrity-checked dataset snapshot.
     dataset = _load_swebench_verified_snapshot()
-    
     # Ensure that necessary directories exist
     if model_name_or_path is None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -282,7 +281,7 @@ def harness(
     pred_dname = Path(pred_dname)
     pred_dname.mkdir(exist_ok=True)
     out_dnames = []
-    
+
     # Prepare the dataset entries
     entries = list(dataset)
     if test_task_list:
@@ -294,15 +293,15 @@ def harness(
     from swebench.harness.docker_build import build_env_images
     client = require_docker_client()
     build_env_images(client, dataset=entries, force_rebuild=False, max_workers=max_workers)
-    
+
     # Define a function to handle a single evaluation for all specified issues
     def process_evaluation(eval_idx):
         model_name_or_path_inst = f"{model_name_or_path}_{eval_idx}"
         out_dname = pred_dname / model_name_or_path_inst
         out_dname.mkdir(exist_ok=True)
-        
+
         print(f"Starting evaluation {eval_idx} for model {model_name_or_path}")
-        
+
         # Process entries in parallel
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
@@ -310,7 +309,7 @@ def harness(
                 executor.submit(process_entry, entry, out_dname, model_name_or_path_inst, model_patch_paths): entry
                 for entry in entries
             }
-            
+
             # Process completed tasks as they finish
             for future in as_completed(future_to_entry):
                 result = future.result()
@@ -339,7 +338,7 @@ def main():
     parser.add_argument("--pred_dname", type=str, default="./swe_bench/predictions", help="Output directory for predictions")
     parser.add_argument("--test_task_list", type=str, default=None, help="Subset of swe issues to process")
     args = parser.parse_args()
-    
+
     # Load the test task list
     if args.test_task_list == 'small':
         test_task_list = load_json_file("./swe_bench/subsets/small.json")

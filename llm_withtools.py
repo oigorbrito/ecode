@@ -6,7 +6,7 @@ import backoff
 import openai
 import copy
 
-from llm import create_client, get_response_from_llm, resolve_model
+from llm import create_client, emit_response_usage, get_response_from_llm, resolve_model
 from prompts.tooluse_prompt import get_tooluse_prompt
 from tools import load_all_tools
 
@@ -91,6 +91,9 @@ def get_response_withtools(
             response = response
         else:
             raise ValueError(f"Unsupported model: {model}")
+        if callable(logging):
+            emit_response_usage(response, model,
+                                lambda event: logging("LLM Usage: " + json.dumps(event, sort_keys=True)))
         return response
     except Exception as e:
         logging(f"Error in get_response_withtools: {str(e)}")
@@ -146,6 +149,38 @@ def check_for_tool_use(response, model=''):
     # No tool use found
     return None
 
+def diagnose_manual_tool_response(response, tools_dict):
+    """Observe literal protocol failures; never repair or execute a proposal.
+
+    This reports parsing/dispatch boundaries, not filesystem effects or intent
+    inferred from prose. The existing parser still decides what is dispatched.
+    """
+    events = []
+    blocks = re.findall(r'<tool_use>(.*?)</tool_use>', response, re.DOTALL)
+    if not blocks:
+        for block in re.findall(r'```(?:json|python)?\s*(.*?)```', response, re.DOTALL):
+            try:
+                proposal = ast.literal_eval(block.strip())
+            except (ValueError, SyntaxError):
+                continue
+            if isinstance(proposal, dict) and {'tool_name', 'tool_input'} <= proposal.keys():
+                events.append({'classification': 'INVALID_TOOL_ENVELOPE', 'dispatched': False})
+        return events
+    for index, block in enumerate(blocks):
+        if index:
+            events.append({'classification': 'TOOL_CALL_NOT_DISPATCHED', 'block_index': index, 'dispatched': False})
+            continue
+        try:
+            proposal = ast.literal_eval(block.strip())
+        except (ValueError, SyntaxError):
+            proposal = None
+        if not isinstance(proposal, dict) or not {'tool_name', 'tool_input'} <= proposal.keys():
+            events.append({'classification': 'INVALID_TOOL_ENVELOPE', 'block_index': index, 'dispatched': False})
+        elif isinstance(proposal['tool_name'], str) and proposal['tool_name'] not in tools_dict:
+            events.append({'classification': 'UNKNOWN_TOOL', 'tool_name': proposal['tool_name'], 'block_index': index})
+    return events
+
+
 def convert_tool_info(tool_info, model=None):
     """
     Converts tool_info from Claude format to the given model's format.
@@ -173,7 +208,7 @@ def convert_tool_info(tool_info, model=None):
                     tool_info['input_schema']['properties'][p]["type"] = [t, "null"]
                 elif isinstance(t, list):
                     tool_info['input_schema']['properties'][p]["type"] = t + ["null"]
-                
+
         return {
             'type': 'function',
             'name': tool_info['name'],
@@ -324,12 +359,13 @@ def chat_with_agent_manualtools(msg, model, msg_history=None, logging=print):
         msg_history = []
     system_message = f'You are a coding agent.\n\n{get_tooluse_prompt()}'
     new_msg_history = msg_history
+    usage_logger = lambda event: logging("LLM Usage: " + json.dumps(event, sort_keys=True))
 
     try:
         # Load all tools
         all_tools = load_all_tools(logging=logging)
         tools_dict = {tool['info']['name']: tool for tool in all_tools}
-        
+
         # Create client
         client, client_model = create_client(model)
 
@@ -342,11 +378,14 @@ def chat_with_agent_manualtools(msg, model, msg_history=None, logging=print):
             system_message=system_message,
             print_debug=False,
             msg_history=new_msg_history,
+            on_usage=usage_logger,
         )
         logging(f"Output: {response}")
 
         # Tool use
         tool_use = check_for_tool_use(response, model=client_model)
+        for event in diagnose_manual_tool_response(response, tools_dict):
+            logging("Tool Protocol Event: " + json.dumps(event, sort_keys=True))
         while tool_use:
             # Process tool call
             tool_name = tool_use['tool_name']
@@ -363,11 +402,14 @@ def chat_with_agent_manualtools(msg, model, msg_history=None, logging=print):
                 system_message=system_message,
                 print_debug=False,
                 msg_history=new_msg_history,
+                on_usage=usage_logger,
             )
             logging(f"Output: {response}")
 
             # Check for next tool use
             tool_use = check_for_tool_use(response, model=client_model)
+            for event in diagnose_manual_tool_response(response, tools_dict):
+                logging("Tool Protocol Event: " + json.dumps(event, sort_keys=True))
 
     except Exception:
         pass

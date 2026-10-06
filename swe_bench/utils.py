@@ -28,7 +28,7 @@ def setup_logger(log_file):
     logger_name = f'docker_logger_{thread_id}'
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.INFO)
-    
+
     # Clear existing handlers
     for handler in logger.handlers:
         logger.removeHandler(handler)
@@ -37,17 +37,17 @@ def setup_logger(log_file):
     handler = logging.FileHandler(log_file)
     handler.setLevel(logging.INFO)
     handler.stream.lock = threading.Lock()
-    
+
     # Create formatter
     formatter = logging.Formatter('%(asctime)s - %(threadName)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
-    
+
     # Add handler to logger
     logger.addHandler(handler)
-    
+
     # Store logger in thread local storage
     _thread_local.logger = logger
-    
+
     return logger
 
 def safe_log(message: str, level: int = logging.INFO):
@@ -97,7 +97,7 @@ def create_archive(path: Union[str, Path], data: Optional[bytes] = None) -> byte
             path = Path(path)
             arcname = path.name
             tar.add(path, arcname=arcname)
-    
+
     tar_stream.seek(0)
     return tar_stream.read()
 
@@ -116,11 +116,11 @@ def copy_to_container(container, source_path: Union[str, Path], dest_path: Union
     """
     source_path = Path(source_path)
     dest_path = Path(dest_path)
-    
+
     try:
         if not source_path.exists():
             raise FileNotFoundError(f"Source path not found: {source_path}")
-            
+
         # Determine container destination directory
         if source_path.is_file():
             container_dest_dir = str(dest_path.parent)
@@ -132,18 +132,18 @@ def copy_to_container(container, source_path: Union[str, Path], dest_path: Union
             # For directories, we want to copy to the parent of dest_path
             container_dest_dir = str(dest_path.parent)
             archive = create_archive(source_path)
-            
+
         # Create destination directory in container if it doesn't exist
         container.exec_run(f"mkdir -p {container_dest_dir}")
 
         safe_log(f"Copying {source_path} to container at {dest_path}")
         success = container.put_archive(container_dest_dir, archive)
-        
+
         if not success:
             raise Exception(f"Failed to copy {source_path} to container")
-            
+
         safe_log(f"Successfully copied {source_path} to container")
-        
+
     except Exception as e:
         safe_log(f"Error copying to container: {e}", logging.ERROR)
         raise
@@ -163,31 +163,31 @@ def copy_from_container(container, source_path: Union[str, Path], dest_path: Uni
     """
     source_path = Path(source_path)
     dest_path = Path(dest_path)
-    
+
     try:
         # Check if source exists in container
         result = container.exec_run(f"test -e {source_path}")
         if result.exit_code and result.exit_code != 0:
             raise FileNotFoundError(f"Source path not found in container: {source_path}")
-            
+
         # Get file type from container
         result = container.exec_run(f"stat -f '%HT' {source_path}")
         is_file = result.output.decode().strip() == 'Regular File'
-            
+
         # Create destination directory if it doesn't exist
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         safe_log(f"Copying from container {source_path} to local path {dest_path}")
-        
+
         # Get archive from container
         bits, stat = container.get_archive(str(source_path))
-        
+
         # Concatenate all chunks into a single bytes object
         archive_data = b''.join(bits)
-        
+
         # Extract to temporary stream
         stream = io.BytesIO(archive_data)
-        
+
         with tarfile.open(fileobj=stream, mode='r') as tar:
             # If extracting a single file
             if is_file:
@@ -204,9 +204,9 @@ def copy_from_container(container, source_path: Union[str, Path], dest_path: Uni
                 extracted_path = dest_path.parent / Path(stat['name']).name
                 if extracted_path != dest_path and extracted_path.exists():
                     extracted_path.rename(dest_path)
-        
+
         safe_log(f"Successfully copied from container to {dest_path}")
-        
+
     except Exception as e:
         safe_log(f"Error copying from container: {e}", logging.ERROR)
         raise
@@ -224,7 +224,7 @@ def log_container_output(exec_result, raise_error=True):
         for chunk in exec_result.output:
             if chunk:
                 safe_log(f"Container output: {chunk.decode().strip()}")
-    
+
     # Check exit code
     if raise_error:
         if exec_result.exit_code and exec_result.exit_code != 0:
