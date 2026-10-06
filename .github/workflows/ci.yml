@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, eval/bootstrap-ci]
   workflow_dispatch:
 
 permissions:
