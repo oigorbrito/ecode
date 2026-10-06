@@ -68,7 +68,10 @@ def validate_path(path: str, command: str) -> Path:
         if path_obj.is_dir():
             raise ValueError(f"{path} is a directory and cannot be edited as a file.")
     else:
-        raise ValueError(f"Unknown or unsupported command: {command}")
+        raise ValueError(
+            f"Unknown or unsupported command: {command}. "
+            "Valid commands: view, create, edit."
+        )
 
     return path_obj
 

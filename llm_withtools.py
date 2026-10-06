@@ -49,7 +49,8 @@ def process_tool_call_c1(tools_dict, tool_name, tool_input):
     # Candidate dispatcher: normalize the known string form for bash only.
     try:
         if tool_name not in tools_dict:
-            return f"Error: Tool '{tool_name}' not found"
+            available = ", ".join(sorted(tools_dict))
+            return f"Error: Tool '{tool_name}' not found. Available tools: {available}."
         if tool_name == "bash":
             tool_input = normalize_bash_tool_input(tool_input)
         return tools_dict[tool_name]['function'](**tool_input)
