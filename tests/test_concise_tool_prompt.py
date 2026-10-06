@@ -13,8 +13,24 @@ def _contracts(prompt):
     return json.loads(payload)
 
 
-def test_c1_is_default_candidate():
+def test_c1_is_default_candidate(monkeypatch):
+    monkeypatch.delenv("ECODE_TOOL_PROMPT_PROFILE", raising=False)
     assert get_tooluse_prompt() == get_tooluse_prompt_c1()
+
+
+def test_b0_can_be_selected_without_code_change(monkeypatch):
+    monkeypatch.setenv("ECODE_TOOL_PROMPT_PROFILE", "B0")
+    assert get_tooluse_prompt() == get_tooluse_prompt_b0()
+
+
+def test_invalid_profile_fails_closed(monkeypatch):
+    monkeypatch.setenv("ECODE_TOOL_PROMPT_PROFILE", "UNKNOWN")
+    try:
+        get_tooluse_prompt()
+    except ValueError as exc:
+        assert "must be B0 or C1" in str(exc)
+    else:
+        raise AssertionError("invalid Arena-1 profile did not fail closed")
 
 
 def test_c1_removes_tool_implementation_source():
