@@ -40,7 +40,7 @@ class ECodeEvaluator:
         candidate_ref = _artifact_ref(candidate_path)
         if candidate_ref.sha256 != agent.artifact.sha256:
             raise ValueError(f"candidate artifact changed after registration: {agent.version_id}")
-        artifact_refs = {(candidate_ref.path, candidate_ref.sha256): agent.artifact}
+        artifact_refs = {(candidate_ref.path, candidate_ref.sha256): candidate_ref}
         for artifact_path in artifact_paths:
             path = Path(artifact_path)
             resolved = _resolve_artifact_path(path, context.artifact_dir)
@@ -81,6 +81,7 @@ def _artifact_ref(path: Path) -> ArtifactRef:
 
 
 def _resolve_artifact_path(path: Path, artifact_dir: Path) -> Path:
-    if path.is_absolute() or path.exists():
+    """Resolve relative artifact identities only within the evaluation artifact root."""
+    if path.is_absolute():
         return path
     return artifact_dir / path
