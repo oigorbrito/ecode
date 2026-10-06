@@ -8,16 +8,7 @@ from pathlib import Path
 
 from prompts.testrepo_prompt import get_test_description
 
-from swe_bench.utils import (
-    copy_to_container,
-    copy_from_container,
-    log_container_output,
-    remove_existing_container,
-    safe_log,
-    setup_logger,
-)
 from utils.common_utils import load_json_file
-from utils.docker_utils import require_docker_client
 
 SWE_BENCH_VERIFIED_REVISION = "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
 SWE_BENCH_VERIFIED_ROWS = 500
@@ -98,6 +89,15 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
     import docker
     from swebench.harness.test_spec import make_test_spec
     from swebench.harness.docker_build import build_container, cleanup_container
+    from swe_bench.utils import (
+        copy_to_container,
+        copy_from_container,
+        log_container_output,
+        remove_existing_container,
+        safe_log,
+        setup_logger,
+    )
+    from utils.docker_utils import require_docker_client
 
     instance_id = entry['instance_id']
     problem_statement = entry['problem_statement']
@@ -298,6 +298,7 @@ def harness(
 
     # Build the environment images
     from swebench.harness.docker_build import build_env_images
+    from utils.docker_utils import require_docker_client
     client = require_docker_client()
     build_env_images(client, dataset=entries, force_rebuild=False, max_workers=max_workers)
 
