@@ -13,9 +13,9 @@ def _contracts(prompt):
     return json.loads(payload)
 
 
-def test_c1_is_default_candidate(monkeypatch):
+def test_b0_is_default_unpromoted_control(monkeypatch):
     monkeypatch.delenv("ECODE_TOOL_PROMPT_PROFILE", raising=False)
-    assert get_tooluse_prompt() == get_tooluse_prompt_c1()
+    assert get_tooluse_prompt() == get_tooluse_prompt_b0()
 
 
 def test_b0_can_be_selected_without_code_change(monkeypatch):
