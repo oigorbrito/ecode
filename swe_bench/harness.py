@@ -5,7 +5,6 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from datasets import load_dataset
 
 from prompts.testrepo_prompt import get_test_description
 
@@ -68,9 +67,17 @@ def _validate_swebench_verified_snapshot(snapshot_dir=SWE_BENCH_VERIFIED_SNAPSHO
     return parquet_path
 
 
-def _load_swebench_verified_snapshot(snapshot_dir=SWE_BENCH_VERIFIED_SNAPSHOT):
+def _load_swebench_verified_snapshot(
+    snapshot_dir=SWE_BENCH_VERIFIED_SNAPSHOT,
+    dataset_loader=None,
+):
     parquet_path = _validate_swebench_verified_snapshot(snapshot_dir)
-    dataset = load_dataset("parquet", data_files={"test": str(parquet_path)}, split="test")
+
+    if dataset_loader is None:
+        from datasets import load_dataset
+        dataset_loader = load_dataset
+
+    dataset = dataset_loader("parquet", data_files={"test": str(parquet_path)}, split="test")
 
     instance_ids = [entry["instance_id"] for entry in dataset]
     if len(instance_ids) != SWE_BENCH_VERIFIED_ROWS:

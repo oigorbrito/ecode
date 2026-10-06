@@ -54,7 +54,7 @@ def test_validate_snapshot_rejects_hash_mismatch(tmp_path):
         harness._validate_swebench_verified_snapshot(root)
 
 
-def test_load_snapshot_uses_local_parquet_and_validates_cardinality(tmp_path, monkeypatch):
+def test_load_snapshot_uses_local_parquet_and_validates_cardinality(tmp_path):
     root = tmp_path / "snapshot"
     parquet = _write_snapshot(root)
     rows = [{"instance_id": f"task-{i}"} for i in range(harness.SWE_BENCH_VERIFIED_ROWS)]
@@ -64,18 +64,21 @@ def test_load_snapshot_uses_local_parquet_and_validates_cardinality(tmp_path, mo
         calls.append((name, data_files, split))
         return rows
 
-    monkeypatch.setattr(harness, "load_dataset", fake_load_dataset)
-
-    assert harness._load_swebench_verified_snapshot(root) == rows
+    result = harness._load_swebench_verified_snapshot(
+        root,
+        dataset_loader=fake_load_dataset,
+    )
+    assert result == rows
     assert calls == [("parquet", {"test": str(parquet)}, "test")]
 
 
-def test_load_snapshot_rejects_duplicate_instance_ids(tmp_path, monkeypatch):
+def test_load_snapshot_rejects_duplicate_instance_ids(tmp_path):
     root = tmp_path / "snapshot"
     _write_snapshot(root)
     rows = [{"instance_id": "duplicate"} for _ in range(harness.SWE_BENCH_VERIFIED_ROWS)]
 
-    monkeypatch.setattr(harness, "load_dataset", lambda *args, **kwargs: rows)
-
     with pytest.raises(RuntimeError, match="not unique"):
-        harness._load_swebench_verified_snapshot(root)
+        harness._load_swebench_verified_snapshot(
+            root,
+            dataset_loader=lambda *args, **kwargs: rows,
+        )
