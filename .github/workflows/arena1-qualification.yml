@@ -34,3 +34,5 @@ jobs:
           print(f"C1_CHARS={c1}")
           print(f"REDUCTION={(1-c1/b0)*100:.2f}%")
           PY
+
+# arena trigger
