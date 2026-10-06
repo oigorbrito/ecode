@@ -5,12 +5,9 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-import docker
 from datasets import load_dataset
 
 from prompts.testrepo_prompt import get_test_description
-from swebench.harness.test_spec import make_test_spec
-from swebench.harness.docker_build import build_env_images, build_container, cleanup_container
 
 from swe_bench.utils import (
     copy_to_container,
@@ -91,6 +88,10 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
     Process a single dataset entry. This function encapsulates the main processing logic
     for each entry to make it suitable for parallel execution.
     """
+    import docker
+    from swebench.harness.test_spec import make_test_spec
+    from swebench.harness.docker_build import build_container, cleanup_container
+
     instance_id = entry['instance_id']
     problem_statement = entry['problem_statement']
     base_commit = entry['base_commit']
@@ -290,6 +291,7 @@ def harness(
         entries = entries[:num_samples]
 
     # Build the environment images
+    from swebench.harness.docker_build import build_env_images
     client = require_docker_client()
     build_env_images(client, dataset=entries, force_rebuild=False, max_workers=max_workers)
     
