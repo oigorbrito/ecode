@@ -103,3 +103,23 @@ def test_editor_payload_missing_required_path_is_not_dispatched():
     result = process_tool_call({"editor": {"function": editor}}, "editor", {"command": "edit"})
     assert result.startswith("Error executing tool 'editor':")
     assert calls == []
+
+
+def test_c1_dispatches_localized_editor_payload_end_to_end(tmp_path):
+    path = tmp_path / "candidate.py"
+    path.write_text("def value():\n    return 1\n")
+    tools = {"editor": {"function": tool_function}}
+
+    result = process_tool_call(
+        tools,
+        "editor",
+        {
+            "command": "edit",
+            "path": str(path),
+            "old_text": "    return 1",
+            "new_text": "    return 2",
+        },
+    )
+
+    assert "localized replacement" in result
+    assert path.read_text() == "def value():\n    return 2\n"
