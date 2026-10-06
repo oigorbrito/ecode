@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, eval/bootstrap-ci]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -23,8 +23,8 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install check tools
-        run: python -m pip install --disable-pip-version-check pytest pytest-asyncio ruff==0.16.7
+      - name: Install test dependencies and check tools
+        run: python -m pip install --disable-pip-version-check pytest pytest-asyncio ruff==0.16.7 anthropic openai backoff
 
       - name: Lint
         run: ruff check .

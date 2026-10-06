@@ -356,7 +356,7 @@ def get_diagnose_prompt_polyglot(entry_id, commit, root_dir, out_dir, dataset, p
         'prompts/self_improvement_prompt.py',
     ]
     code_text = get_current_code(root_dir, code_files, patch_files=patch_files, exclude_files=exclude_files, is_polyglot=is_polyglot)
-    
+
     import random
 
     if random.random() < 0.25:
@@ -372,10 +372,10 @@ def get_eval_log_text(eval_json, test_status=None):
     if not test_status:
         first_key = next(iter(eval_json))
         tests_status = eval_json[first_key].get('tests_status', {})
-    
+
     # Initialize result parts
     result_parts = []
-    
+
     # Handle FAIL_TO_PASS tests
     result_parts.append("## New tests for the issue")
     result_parts.append("These test whether the coding agent fixed the requested issue.")
@@ -390,7 +390,7 @@ def get_eval_log_text(eval_json, test_status=None):
             result_parts.append(f"  ✗ {test}")
     else:
         result_parts.append(f"Pass All New Tests!")
-    
+
     # Handle PASS_TO_PASS tests
     result_parts.append("## Previous tests from the repo")
     result_parts.append("These test whether the modification that coding agent made break the previous tests")
@@ -403,7 +403,7 @@ def get_eval_log_text(eval_json, test_status=None):
             result_parts.append(f"  ✗ {test}")
     else:
         result_parts.append(f"Pass All Previous Tests!")
-    
+
     return "\n".join(result_parts) if result_parts else "No test results available. Assume all tests failed."
 
 def get_current_code(current_dir, code_files, patch_files=None, exclude_files=None, is_polyglot=False):
@@ -442,7 +442,7 @@ def get_current_code(current_dir, code_files, patch_files=None, exclude_files=No
                 # Handle polyglot case
                 if is_polyglot and 'coding_agent.py' in file_path:
                     full_path = full_path.replace('coding_agent.py', f'coding_agent_polyglot.py')
-                
+
                 code_text.append(f"# {rel_path}")
                 code_text.append(read_file(full_path))
 

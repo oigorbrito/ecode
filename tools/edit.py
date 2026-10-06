@@ -1,5 +1,7 @@
 from pathlib import Path
 import subprocess
+import os
+import tempfile
 
 def tool_info():
     return {
@@ -9,8 +11,8 @@ def tool_info():
 * If `path` is a file, `view` displays the entire file with line numbers. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep.\n
 * The `create` command cannot be used if the specified `path` already exists as a file.\n
 * If a `command` generates a long output, it will be truncated and marked with `<response clipped>`.\n
-* The `edit` command overwrites the entire file with the provided `file_text`.\n
-* No partial/line-range edits or partial viewing are supported.""",
+* Prefer `view`, then `edit` with `old_text` and `new_text`: replace exactly one literal occurrence. Missing, empty, or ambiguous targets fail without writing. No line-range editing.\n
+* `file_text` remains available for whole-file overwrite, mutually exclusive with localized parameters. All supplied text is applied literally, without syntax repair or completion. Prefer minimal edits; preserve unrelated code. Verify afterward.""",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -23,8 +25,16 @@ def tool_info():
                     "description": "Absolute path to file or directory, e.g. `/repo/file.py` or `/repo`.",
                     "type": "string"
                 },
+                "old_text": {
+                    "description": "For localized edit: exact nonempty text already present exactly once in the file. View first.",
+                    "type": "string"
+                },
+                "new_text": {
+                    "description": "For localized edit: literal replacement text, including any intended indentation. May be empty.",
+                    "type": "string"
+                },
                 "file_text": {
-                    "description": "Required parameter of `create` or `edit` command, containing the content for the entire file.",
+                    "description": "Required for create or legacy whole-file edit only. Mutually exclusive with old_text/new_text; written literally.",
                     "type": "string"
                 }
             },
@@ -122,16 +132,54 @@ def view_path(path_obj: Path) -> str:
     content = read_file(path_obj)
     return format_output(content, str(path_obj))
 
-def tool_function(command: str, path: str, file_text: str = None) -> str:
+def localized_edit(path: Path, old_text: str, new_text: str) -> str:
+    """Replace one exact target; preserve other bytes and commit atomically."""
+    if not isinstance(old_text, str) or not old_text:
+        raise ValueError("Localized edit requires nonempty string old_text.")
+    if not isinstance(new_text, str):
+        raise ValueError("Localized edit requires string new_text.")
+    original = path.read_bytes()
+    text = original.decode("utf-8")
+    start = text.find(old_text)
+    if start < 0:
+        raise ValueError("Localized edit target not found; no bytes written.")
+    if text.find(old_text, start + 1) >= 0:
+        raise ValueError("Localized edit target is ambiguous; no bytes written.")
+    updated = (text[:start] + new_text + text[start + len(old_text):]).encode("utf-8")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
+            temporary = Path(handle.name)
+            handle.write(updated)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, path.stat().st_mode)
+        if path.read_bytes() != original:
+            raise ValueError("File changed during localized edit; no replacement committed.")
+        os.replace(temporary, path)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return f"Localized edit applied literally at {path}; replaced {len(old_text.encode('utf-8'))} bytes with {len(new_text.encode('utf-8'))} bytes."
+
+
+def tool_function(command: str, path: str, file_text: str = None,
+                  old_text: str = None, new_text: str = None) -> str:
     """
     Main tool function that handles:
       - 'view'  : View the entire file or directory listing
       - 'create': Create a new file with the given file_text
-      - 'edit'  : Overwrite an existing file with file_text
+      - 'edit'  : Replace one exact old_text with new_text, or legacy file_text overwrite
     """
     try:
         path_obj = validate_path(path, command)
 
+        localized = old_text is not None or new_text is not None
+        if localized and command != "edit":
+            raise ValueError("old_text/new_text are only valid for edit.")
+        if localized and file_text is not None:
+            raise ValueError("Choose old_text/new_text or file_text, never both.")
         if command == "view":
             return view_path(path_obj)
 
@@ -142,6 +190,8 @@ def tool_function(command: str, path: str, file_text: str = None) -> str:
             return f"File created successfully at: {path}"
 
         elif command == "edit":
+            if localized:
+                return localized_edit(path_obj, old_text, new_text)
             if file_text is None:
                 raise ValueError("Missing required `file_text` for 'edit' command.")
             write_file(path_obj, file_text)
