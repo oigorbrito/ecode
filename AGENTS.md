@@ -1,20 +1,107 @@
-# Agent Instructions
+# AGENTS.md
 
-These instructions are a repository adapter built on top of externally defined controls. They are **not themselves an OpenSSF, NIST or DORA requirement**.
+## Purpose
 
-Before changing code or documentation:
+This repository is ECode. Read `ROADMAP.md` before material architecture, evaluation, or agent changes.
 
-1. Read `policy/project-state.json`, `docs/MATURITY.md`, `docs/ARCHITECTURE.md`, and `docs/TESTING.md`.
-2. Run `python scripts/harness.py` before claiming repository readiness.
-3. Never convert missing, stale, inaccessible, or unexecuted evidence into `PASS`.
-4. Use these result meanings exactly:
-   - `PASS`: evidence was found or executed and satisfies the local check.
-   - `GAP`: an applicable local requirement is not satisfied.
-   - `UNKNOWN_EXTERNAL`: the requirement depends on repository/platform state that this harness cannot prove locally.
-   - `NOT_APPLICABLE`: the documented trigger is not currently true.
-5. Product labels such as `prototype`, `MVP`, or `production` are descriptive only. They do not promote OSPS maturity.
-6. If a release is observed (state file or Git tag), run the release-conditioned checks and report every newly applicable gap.
-7. If the number of maintainers or user population materially changes, flag `MATURITY_REASSESSMENT_REQUIRED`; do not silently promote the target level.
-8. Do not add a security, release, architecture, or compliance claim unless the supporting evidence is versioned or externally verifiable.
-9. Prefer the smallest change that closes a documented gap. Do not add controls merely for appearance.
-10. After material project changes, rerun the harness and tests.
+ECode is evidence-driven. Planned mechanisms remain hypotheses until local evidence promotes them.
+
+## Before changing the repository
+
+1. Read `README.md`, `ROADMAP.md`, `CONTRIBUTING.md`, and `SECURITY.md` when relevant.
+2. Inspect the actual checked-out repository state before assuming a path, script, test command, runtime, or branch exists.
+3. Search for already-preserved test, benchmark, CI, audit, and provenance evidence before rerunning work.
+4. Reuse existing evidence only when its revision, runtime/model condition, workload, verifier, budget, and relevant environment identity match the current decision question.
+5. Prefer the smallest reversible change that tests one hypothesis.
+
+## Evidence semantics
+
+```text
+DOCUMENTED != EXECUTED
+IMPLEMENTED != PROMOTED
+EXTERNAL_PASS != ECODE_PASS
+TEST_PASS != BENEFIT_PROVEN
+CLAIM_SCOPE <= EVIDENCE_SCOPE
+```
+
+Do not report `PASS` for missing, stale, inaccessible, skipped, or unexecuted evidence.
+
+Use explicit non-pass states such as `BLOCKED`, `INCONCLUSIVE`, or the vocabulary defined by the active local harness.
+
+## Experiment discipline
+
+Change one mechanism at a time when attribution matters.
+
+Before executing a test or experiment:
+
+- inspect existing repository evidence;
+- inspect relevant CI/workflow results;
+- inspect preserved experiment/provenance records;
+- determine whether the existing evidence already answers the same question.
+
+```text
+EXISTING_VALID_EVIDENCE != RETEST_REQUIRED
+```
+
+Rerun only when evidence is missing, incompatible, stale for the decision, inconclusive, or replication is explicitly required.
+
+Decision-bearing comparisons should record enough identity to reproduce the condition, including as applicable:
+
+- ECode revision;
+- model/runtime identity;
+- hardware;
+- dataset/workload;
+- random seed;
+- verifier;
+- budget and timeout;
+- repetitions;
+- artifact hashes.
+
+A single successful run is insufficient evidence of a general gain when stochastic behavior is material.
+
+## Runtime and safety
+
+Fail closed.
+
+```text
+SANDBOX_REQUESTED
++
+SANDBOX_UNAVAILABLE
+=
+BLOCKED
+```
+
+Do not silently substitute host execution, a different model/runtime, a different verifier, a different workload, or a weaker safety boundary in a decision-bearing experiment.
+
+Malformed tool calls, no-op edits, path-resolution failures, timeouts, and verifier feedback loops must be classified rather than hidden.
+
+## Testing
+
+Use only test and verification commands that actually exist in the checked-out revision.
+
+Before claiming a change is ready:
+
+- run the smallest relevant tests first;
+- run broader regression when practical;
+- preserve commands and outcomes;
+- distinguish infrastructure failure from candidate failure.
+
+If the current revision does not contain an executable harness, do not claim that a canonical harness command was run.
+
+## Roadmap control
+
+The roadmap may retain future phases before they are implemented.
+
+Do not remove a planned mechanism merely because it has not yet been tested. Gate implementation on empirical qualification.
+
+Change phase ordering only when evidence shows that a prerequisite, risk, or measured failure mode invalidates the previous order.
+
+## Scope control
+
+Do not add expensive mechanisms merely because they are common in agent systems.
+
+```text
+MORE_FEATURES != BETTER_PRODUCT
+```
+
+Complexity must earn the right to remain.
