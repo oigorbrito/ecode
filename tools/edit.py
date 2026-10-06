@@ -1,5 +1,8 @@
 from pathlib import Path
+import ast
+import os
 import subprocess
+import tempfile
 
 def tool_info():
     return {
@@ -24,7 +27,15 @@ def tool_info():
                     "type": "string"
                 },
                 "file_text": {
-                    "description": "Required parameter of `create` or `edit` command, containing the content for the entire file.",
+                    "description": "Content for create or full-file edit. Mutually exclusive with old_text/new_text.",
+                    "type": "string"
+                },
+                "old_text": {
+                    "description": "Exact existing text to replace once during a localized edit.",
+                    "type": "string"
+                },
+                "new_text": {
+                    "description": "Replacement text for old_text during a localized edit.",
                     "type": "string"
                 }
             },
@@ -92,12 +103,47 @@ def read_file(path: Path) -> str:
     except Exception as e:
         raise ValueError(f"Failed to read file: {e}")
 
+def _validate_candidate(path: Path, content: str) -> None:
+    """Reject syntactically invalid Python before touching the target."""
+    if path.suffix == ".py":
+        try:
+            ast.parse(content, filename=str(path))
+        except SyntaxError as e:
+            raise ValueError(
+                f"Python syntax validation failed at line {e.lineno}: {e.msg}"
+            ) from e
+
+
 def write_file(path: Path, content: str):
-    """Write (overwrite) entire file contents."""
+    """Validate and atomically replace a file in its existing directory."""
+    _validate_candidate(path, content)
+    temp_name = None
     try:
-        path.write_text(content)
+        mode = path.stat().st_mode if path.exists() else None
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_name = handle.name
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if mode is not None:
+            os.chmod(temp_name, mode)
+        os.replace(temp_name, path)
+        temp_name = None
     except Exception as e:
-        raise ValueError(f"Failed to write file: {e}")
+        raise ValueError(f"Failed to write file: {e}") from e
+    finally:
+        if temp_name is not None:
+            try:
+                os.unlink(temp_name)
+            except FileNotFoundError:
+                pass
 
 def view_path(path_obj: Path) -> str:
     """View the entire file contents or directory listing."""
@@ -122,12 +168,18 @@ def view_path(path_obj: Path) -> str:
     content = read_file(path_obj)
     return format_output(content, str(path_obj))
 
-def tool_function(command: str, path: str, file_text: str = None) -> str:
+def tool_function(
+    command: str,
+    path: str,
+    file_text: str = None,
+    old_text: str = None,
+    new_text: str = None,
+) -> str:
     """
     Main tool function that handles:
       - 'view'  : View the entire file or directory listing
       - 'create': Create a new file with the given file_text
-      - 'edit'  : Overwrite an existing file with file_text
+      - 'edit'  : Full replacement with file_text, or one exact old_text/new_text replacement
     """
     try:
         path_obj = validate_path(path, command)
@@ -142,8 +194,32 @@ def tool_function(command: str, path: str, file_text: str = None) -> str:
             return f"File created successfully at: {path}"
 
         elif command == "edit":
+            localized = old_text is not None or new_text is not None
+            if localized and file_text is not None:
+                raise ValueError(
+                    "Use either `file_text` or `old_text`/`new_text`, not both."
+                )
+            if localized:
+                if old_text is None or new_text is None:
+                    raise ValueError(
+                        "Localized edit requires both `old_text` and `new_text`."
+                    )
+                if old_text == "":
+                    raise ValueError("`old_text` must not be empty.")
+                current = read_file(path_obj)
+                occurrences = current.count(old_text)
+                if occurrences != 1:
+                    raise ValueError(
+                        "Localized edit requires exactly one match for `old_text`; "
+                        f"found {occurrences}."
+                    )
+                candidate = current.replace(old_text, new_text, 1)
+                write_file(path_obj, candidate)
+                return f"File at {path} updated by one exact localized replacement."
             if file_text is None:
-                raise ValueError("Missing required `file_text` for 'edit' command.")
+                raise ValueError(
+                    "Edit requires `file_text` or both `old_text` and `new_text`."
+                )
             write_file(path_obj, file_text)
             return f"File at {path} has been overwritten with new content."
 
