@@ -83,3 +83,71 @@ class TestEditorTool:
         """Test various invalid commands."""
         result = tool_function(command, str(sample_file))
         assert "Error" in result
+
+
+def test_localized_edit_replaces_exactly_one_match(temp_dir):
+    path = temp_dir / "candidate.py"
+    path.write_text("def value():\n    return 1\n")
+    result = tool_function(
+        "edit",
+        str(path),
+        old_text="    return 1",
+        new_text="    return 2",
+    )
+    assert "localized replacement" in result
+    assert path.read_text() == "def value():\n    return 2\n"
+
+
+@pytest.mark.parametrize("content", [
+    "same\nsame\n",
+    "different\n",
+])
+def test_localized_edit_rejects_ambiguous_or_missing_match_without_writing(temp_dir, content):
+    path = temp_dir / "candidate.txt"
+    path.write_text(content)
+    before = path.read_bytes()
+    result = tool_function(
+        "edit",
+        str(path),
+        old_text="same",
+        new_text="changed",
+    )
+    assert "exactly one match" in result
+    assert path.read_bytes() == before
+
+
+def test_localized_python_edit_rejects_invalid_syntax_without_writing(temp_dir):
+    path = temp_dir / "candidate.py"
+    path.write_text("def value():\n    return 1\n")
+    before = path.read_bytes()
+    result = tool_function(
+        "edit",
+        str(path),
+        old_text="    return 1",
+        new_text="    return (",
+    )
+    assert "syntax validation failed" in result
+    assert path.read_bytes() == before
+
+
+def test_full_python_edit_also_rejects_invalid_syntax_without_writing(temp_dir):
+    path = temp_dir / "candidate.py"
+    path.write_text("value = 1\n")
+    before = path.read_bytes()
+    result = tool_function("edit", str(path), file_text="value = (\n")
+    assert "syntax validation failed" in result
+    assert path.read_bytes() == before
+
+
+def test_edit_rejects_mixed_full_and_localized_payload_without_writing(temp_dir):
+    path = temp_dir / "candidate.txt"
+    path.write_text("before\n")
+    result = tool_function(
+        "edit",
+        str(path),
+        file_text="full\n",
+        old_text="before",
+        new_text="after",
+    )
+    assert "either `file_text`" in result
+    assert path.read_text() == "before\n"
