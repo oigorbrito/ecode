@@ -56,14 +56,19 @@ def get_tooluse_prompt_c1():
     )
 
 
+def get_tool_protocol_profile():
+    """Return the frozen Arena-1 treatment; default to the unpromoted B0 control."""
+    profile = os.getenv("ECODE_TOOL_PROMPT_PROFILE", "B0").upper()
+    if profile not in {"B0", "C1"}:
+        raise ValueError(
+            "ECODE_TOOL_PROMPT_PROFILE must be B0 or C1; "
+            f"received {profile!r}"
+        )
+    return profile
+
+
 def get_tooluse_prompt():
-    """Select the frozen Arena-1 prompt profile without editing code between cells."""
-    profile = os.getenv("ECODE_TOOL_PROMPT_PROFILE", "C1").upper()
-    if profile == "B0":
+    """Select the prompt half of the frozen Arena-1 tool-protocol treatment."""
+    if get_tool_protocol_profile() == "B0":
         return get_tooluse_prompt_b0()
-    if profile == "C1":
-        return get_tooluse_prompt_c1()
-    raise ValueError(
-        "ECODE_TOOL_PROMPT_PROFILE must be B0 or C1; "
-        f"received {profile!r}"
-    )
+    return get_tooluse_prompt_c1()
