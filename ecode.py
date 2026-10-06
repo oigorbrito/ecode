@@ -32,7 +32,7 @@ def initialize_run(output_dir, prevrun_dir=None, polyglot=False):
                 f"Missing local bootstrap evaluation data at {initial_cache}. "
                 "Restore the required evaluation cache locally before starting a run."
             )
-
+    
     return archive, start_gen_num
 
 def any_exceeding_context_length(output_dir, commit_id, instance_ids):
@@ -122,7 +122,7 @@ def choose_selfimproves(output_dir, archive, selfimprove_size, method='random', 
         empty_ids = candidates[parent_commit]['total_emptypatch_ids']
         resolved_ids = candidates[parent_commit]['total_resolved_ids']
         unresolved_ids = candidates[parent_commit]['total_unresolved_ids']
-
+        
         if polyglot:
             entry_ids = empty_ids + unresolved_ids
             if not entry_ids:
@@ -346,7 +346,7 @@ def main(argv=None):
         run_id = datetime.datetime.now().strftime("%Y%m%d%H%M%S_%f")
     else:
         run_id = os.path.basename(args.continue_from)
-
+        
     output_dir = os.path.join("./output_ecode", run_id)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -437,3 +437,5 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
+
+

@@ -78,7 +78,7 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
         chat_history_file_container = f'/ecode/{chat_history_file.name}'
 
         # See the checked repo
-        exec_result = container.exec_run("ls -R /testbed", workdir='/')
+        exec_result = container.exec_run("ls -R /testbed", workdir='/') 
         log_container_output(exec_result)
 
         # Get test description
@@ -161,7 +161,7 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
         }
             out_fname.write_text(json.dumps(result, indent=4))
             return {"success": True, "instance_id": instance_id, "eval_result": eval_result}
-
+    
 
         exec_result = container.exec_run("git -C /testbed stash push " + " ".join(entry['files']['solution']), workdir='/')
         log_container_output(exec_result)
@@ -171,7 +171,7 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
         log_container_output(exec_result)
         exec_result = container.exec_run("git -C /testbed stash pop", workdir='/')
         log_container_output(exec_result)
-
+        
         safe_log("Running the eval")
         language = entry['language']
         test_command = TEST_COMMANDS[language]
@@ -179,9 +179,9 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
         eval_file.write_text(get_eval_script(test_command))
 
         copy_to_container(container, eval_file, '/testbed/eval.sh')
-        exec_result = container.exec_run("ls -R /testbed", workdir='/')
+        exec_result = container.exec_run("ls -R /testbed", workdir='/') 
         log_container_output(exec_result)
-        exec_result = container.exec_run("chmod +x /testbed/eval.sh", workdir='/')
+        exec_result = container.exec_run("chmod +x /testbed/eval.sh", workdir='/') 
         log_container_output(exec_result)
 
         exec_result = container.exec_run("timeout 120 ./eval.sh", workdir='/testbed')
@@ -191,7 +191,7 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
             eval_result = 'resolved'
         else:
             eval_result = 'unresolved'
-
+        
         # Write result to file
         result = {
             "instance_id": instance_id,
@@ -206,7 +206,7 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
         return {"success": True, "instance_id": instance_id, "eval_result": eval_result}
 
     except Exception as e:
-
+        
         # Check if eval_result exists in local scope
         if 'eval_result' not in locals():
             eval_result = 'incomplete'
@@ -227,7 +227,7 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
             "success": False
         }
         out_fname.write_text(json.dumps(result, indent=4))
-
+        
         print(f"Error processing entry {instance_id}: {str(e)}")
         return {"success": False, "instance_id": instance_id, "eval_result": eval_result}
 
@@ -279,7 +279,7 @@ def harness(
         raise FileNotFoundError(f"Dataset file not found: {dataset_path}")
     with open(dataset_path) as f:
         dataset = json.load(f)
-
+    
     # Ensure that necessary directories exist
     if model_name_or_path is None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -287,7 +287,7 @@ def harness(
     pred_dname = Path(pred_dname)
     pred_dname.mkdir(exist_ok=True)
     out_dnames = []
-
+    
     # Prepare the dataset entries
     entries = list(dataset)
     if test_task_list:
@@ -298,15 +298,15 @@ def harness(
     # Build the environment images
     client = require_docker_client()
     build_env_images(client, dataset=entries, max_workers=max_workers, force_rebuild=False)
-
+    
     # Define a function to handle a single evaluation for all specified issues
     def process_evaluation(eval_idx):
         model_name_or_path_inst = f"{model_name_or_path}_{eval_idx}"
         out_dname = pred_dname / model_name_or_path_inst
         out_dname.mkdir(exist_ok=True)
-
+        
         print(f"Starting evaluation {eval_idx} for model {model_name_or_path}")
-
+        
         # Process entries in parallel
         results = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -315,7 +315,7 @@ def harness(
                 executor.submit(process_entry, entry, out_dname, model_name_or_path_inst, model_patch_paths): entry
                 for entry in entries
             }
-
+            
             # Process completed tasks as they finish
             for future in as_completed(future_to_entry):
                 result = future.result()
@@ -325,7 +325,7 @@ def harness(
                 else:
                     print(f"Failed to process entry {result['instance_id']} for eval {eval_idx}: {result.get('error', 'Unknown error')}")
         # Get final results from completed futures
-
+            
         return out_dname, results
 
     out_dname, results = process_evaluation(0)
@@ -350,10 +350,10 @@ def harness(
             elif result.get("eval_result") == "unresolved":
                 unresolved_ids.append(result["instance_id"])
             elif result.get("eval_result") == "empty_patch":
-                empty_patch_ids.append(result["instance_id"])
+                empty_patch_ids.append(result["instance_id"]) 
             else:
                 error_ids.append(result["instance_id"])
-
+    
     report = {
         "total_instances": len(dataset),
         "submitted_instances": len(results),
@@ -397,13 +397,13 @@ def main():
     parser.add_argument("--num_evals", type=int, default=1, help="Repeated number of swe evaluations")
     parser.add_argument("--num_evals_parallel", type=int, default=1, help="Number of parallel repeated evaluations")
     args = parser.parse_args()
-
+    
     with open("polyglot/polyglot_benchmark_metadata.json") as f:
         metadata = json.loads(f.read())
         language_task_list = [entry["instance_id"] for entry in metadata if entry["instance_id"].startswith("python")]
         # Create a list of all tasks from metadata
         all_task_list = [entry["instance_id"] for entry in metadata]
-
+        
     from utils.common_utils import load_json_file
     swe_issues_med = load_json_file("./polyglot/subsets/medium.json")
     model_patch_paths = args.model_patch_paths.split(',') if args.model_patch_paths is not None else None

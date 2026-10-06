@@ -2,13 +2,10 @@ name: CodeQL
 
 on:
   pull_request:
-    branches: [main]
-    paths:
-      - "**/*.py"
   push:
     branches: [main]
-    paths:
-      - "**/*.py"
+  schedule:
+    - cron: "23 5 * * 1"
   workflow_dispatch:
 
 permissions:
