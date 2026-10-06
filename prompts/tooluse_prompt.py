@@ -56,5 +56,14 @@ def get_tooluse_prompt_c1():
     )
 
 
-# Arena-1 candidate. B0 remains callable for controlled comparison.
-get_tooluse_prompt = get_tooluse_prompt_c1
+def get_tooluse_prompt():
+    """Select the frozen Arena-1 prompt profile without editing code between cells."""
+    profile = os.getenv("ECODE_TOOL_PROMPT_PROFILE", "C1").upper()
+    if profile == "B0":
+        return get_tooluse_prompt_b0()
+    if profile == "C1":
+        return get_tooluse_prompt_c1()
+    raise ValueError(
+        "ECODE_TOOL_PROMPT_PROFILE must be B0 or C1; "
+        f"received {profile!r}"
+    )
