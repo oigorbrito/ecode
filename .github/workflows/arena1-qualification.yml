@@ -1,0 +1,36 @@
+name: Arena 1 Qualification
+
+on:
+  push:
+    branches: [ "eval/arena1-concise-tool-protocol" ]
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check pytest pytest-asyncio ruff==0.16.7 anthropic openai backoff
+      - name: Lint
+        run: ruff check .
+      - name: Compile
+        run: python -m compileall -q analysis coding_agent.py coding_agent_polyglot.py ecode.py ecode_core llm.py llm_withtools.py self_improve_step.py swe_bench polyglot prompts tools utils test_swebench.py
+      - name: Tests
+        run: python -m pytest -q
+      - name: Measure prompt contraction
+        run: |
+          python - <<'PY'
+          from prompts.tooluse_prompt import get_tooluse_prompt_b0, get_tooluse_prompt_c1
+          b0 = len(get_tooluse_prompt_b0())
+          c1 = len(get_tooluse_prompt_c1())
+          print(f"B0_CHARS={b0}")
+          print(f"C1_CHARS={c1}")
+          print(f"REDUCTION={(1-c1/b0)*100:.2f}%")
+          PY
