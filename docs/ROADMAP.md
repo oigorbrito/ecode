@@ -1080,3 +1080,22 @@ PERFORMANCE_GAIN = NOT_PROVEN
 ```
 
 O registro detalhado está em `.provenance/local-runtime-smoke-2026-10-05.json`.
+
+## 23. Qualificação local no worktree WSL (2026-10-05)
+
+Esta seção atualiza o estado das seções anteriores para a tentativa no worktree `/mnt/d/projetos/ecode/ecode-wsl`.
+
+- Preflight executado pela `.venv` do worktree: `docker.from_env().ping() == True`; versão do servidor `29.8.1`; `DOCKER_HOST` e `DOCKER_CONTEXT` não definidos. Ping e versão foram coletados no mesmo processo Python antes de iniciar qualquer container.
+- De dentro de `python:3.12-slim`, `GET /v1/models` e `POST /v1/chat/completions` no endpoint Ollama responderam HTTP 200. O modelo `qwen2.5-coder:3b` retornou exatamente `ECODE_CONTAINER_OLLAMA_29_8_1`.
+- A imagem `ecode:local-ollama-smoke` foi construída a partir deste worktree. `coding_agent.py` recebeu o endpoint OpenAI-compatible e retornou exatamente `ECODE_AGENT_OLLAMA_29_8_1`; o patch foi vazio (0 bytes). A cópia do repositório e o baseline Git foram temporários dentro do container.
+- Escopo: um pedido sem uso de ferramentas. Isso valida a inicialização do coding agent, o caminho local até uma resposta do modelo e a extração do patch vazio. O loop de ferramentas, mutação, avaliador, benchmark e comparação legacy/Engine não foram executados; capacidade real e ganho de performance permanecem não provados.
+- Evidência detalhada: `.provenance/coding-agent-ollama-smoke-2026-10-05.json`.
+
+```ini
+DOCKER_PREFLIGHT = PASS_PING_TRUE_SERVER_29.8.1
+CONTAINER_TO_OLLAMA_INFERENCE = PASS
+CODING_AGENT_LOCAL_PROVIDER_WIRING = PASS_WITH_SCOPE_SINGLE_NO_TOOL_RESPONSE
+CODING_AGENT_TOOL_LOOP = NOT_EXECUTED
+REAL_BENCHMARK = NOT_EXECUTED
+PERFORMANCE_GAIN = NOT_PROVEN
+```
