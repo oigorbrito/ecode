@@ -40,7 +40,14 @@ class ECodeEvaluator:
         candidate_ref = _artifact_ref(candidate_path)
         if candidate_ref.sha256 != agent.artifact.sha256:
             raise ValueError(f"candidate artifact changed after registration: {agent.version_id}")
-        artifact_refs = {(candidate_ref.path, candidate_ref.sha256): candidate_ref}
+        canonical_candidate_ref = ArtifactRef(
+            path=candidate_ref.path,
+            sha256=candidate_ref.sha256,
+            media_type=agent.artifact.media_type,
+        )
+        artifact_refs = {
+            (canonical_candidate_ref.path, canonical_candidate_ref.sha256): canonical_candidate_ref
+        }
         for artifact_path in artifact_paths:
             path = Path(artifact_path)
             resolved = _resolve_artifact_path(path, context.artifact_dir)
