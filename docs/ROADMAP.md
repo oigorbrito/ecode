@@ -1099,3 +1099,54 @@ CODING_AGENT_TOOL_LOOP = NOT_EXECUTED
 REAL_BENCHMARK = NOT_EXECUTED
 PERFORMANCE_GAIN = NOT_PROVEN
 ```
+
+## 24. Tool loop do coding agent com Ollama (2026-10-05)
+
+- Repeti a execução em imagem construída de `git archive HEAD`, com uma cópia descartável do repositório dentro do container. Preflight Docker continuou `ping=True`, servidor `29.8.1`.
+- O primeiro pedido de ferramenta gerou `tool_input` como string. `process_tool_call()` expande o argumento com `**tool_input`; a execução falhou com `TypeError` e o modelo repetiu chamadas inválidas. A tentativa não foi aprovada.
+- Na repetição, o pedido explicitou o schema `{ "command": "..." }`. O modelo chamou `bash` uma vez para ler um token aleatório, recebeu corretamente `f588a17e0cbe2a26` e encerrou o ciclo sem modificar o checkout. Isso comprova um único ciclo da ferramenta local em escopo controlado.
+- A resposta final incluiu o token correto, mas adicionou texto ao redor; saída literal exata não passou. O modelo precisou de instrução explícita sobre o formato de `tool_input`, então a robustez do contrato continua limitada.
+- Registro detalhado: `.provenance/coding-agent-tool-smoke-2026-10-05.json`.
+
+```ini
+CODING_AGENT_TOOL_LOOP = PASS_WITH_SCOPE_ONE_BASH_READ_CYCLE
+TOOL_INPUT_SCHEMA_ROBUSTNESS = FRAGILE
+EXACT_FINAL_OUTPUT = NOT_MET
+MUTATION_RUNNER_INTEGRATION = NOT_EXECUTED
+REAL_BENCHMARK = NOT_EXECUTED
+PERFORMANCE_GAIN = NOT_PROVEN
+```
+
+## 25. Experimento isolado de compatibilidade de ferramentas (2026-10-05)
+
+- Repeti o cenário sem mencionar o formato do schema. O modelo voltou a enviar `bash.tool_input` como string; a chamada falhou no dispatcher atual, confirmando a fragilidade observada.
+- Em uma cópia temporária dentro do container, apliquei somente um shim experimental que transforma string de `bash` em `{ "command": string }`. Sem mudar prompt nem worktree, a mesma forma de entrada executou um `cat` de token aleatório e devolveu o conteúdo da ferramenta ao agente.
+- A resposta final incluiu o token, mas manteve prosa/Markdown. O patch do checkout descartável continuou vazio.
+- O shim foi apenas experimento: **não foi promovido ao código ECode**. O resultado sustenta um candidato pequeno de compatibilidade, mas ainda não mede ganho de capacidade nem substitui comparação legacy/Engine.
+- Evidência: tentativa 3 em `.provenance/coding-agent-tool-smoke-2026-10-05.json`.
+
+```ini
+CURRENT_TOOL_LOOP = FRAGILE_WITH_QWEN_STRING_ARGUMENT
+ISOLATED_STRING_NORMALIZER = PASS
+PRODUCTION_NORMALIZER = NOT_PROMOTED
+REAL_BENCHMARK = NOT_EXECUTED
+PERFORMANCE_GAIN = NOT_PROVEN
+```
+
+
+## 26. Normalizacao estrita do bash tool_input (2026-10-05)
+
+- Preservei o dispatcher B0 e comparei-o com C1 usando spy: B0 falha controladamente para string, tipos nao-mapeaveis e objetos com chaves invalidas, mas encaminha o objeto com command nested a funcao da tool. C1 bloqueia esses formatos antes da chamada.
+- C1 normaliza somente string nao vazia para um objeto com command igual a string original. Objeto valido retorna sem reescrita; o helper rejeita comandos vazios, tipos inesperados, chaves diferentes de command, campos extras e command que nao seja string. A validacao ocorre somente para bash; editor e outras tools mantem o contrato atual.
+- tools/bash.py define apenas o argumento command; embora o schema nao declare additionalProperties false, B0 ja rejeita campos extras ao chamar a funcao Python. C1 preserva essa rejeicao efetiva.
+- A trajetoria real usou qwen2.5-coder:3b no container com endpoint Ollama OpenAI-compatible. No mesmo processo do launcher, Docker SDK ping=True, servidor 29.8.1, API 1.56. A tool bash recebeu o payload de entrada como string, leu a fixture aleatoria e devolveu o token cujo SHA-256 coincide com o valor esperado; a mensagem com resultado foi enviada ao modelo.
+- Na segunda fixture, a sequencia observada foi bash -> editor -> bash: leitura inicial VALUE=old, edicao do arquivo descartavel para VALUE=new, verificacao via bash e leitura independente do arquivo final. O retorno positivo do editor usa “has been overwritten with new content”; o primeiro predicado auxiliar do harness esperava a palavra “successfully”, mas a resposta da tool e o conteudo lido independentemente confirmaram a edicao.
+- A suite completa terminou com 78 testes aprovados; compileall e git diff --check passaram. As tres warnings de depreciacao vieram de backoff/asyncio.iscoroutinefunction e nao falharam os testes.
+
+TOOL_INPUT_NORMALIZER = ACCEPTED
+AGENT_TOOL_LOOP = PASS
+REAL_MODEL_CAPABILITY = NOT_ASSESSED
+PERFORMANCE_GAIN = NOT_PROVEN
+BENCHMARK = NOT_EXECUTED
+
+- Provenance detalhado: .provenance/tool-input-normalizer-c1-2026-10-05.json.

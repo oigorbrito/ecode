@@ -13,7 +13,29 @@ from tools import load_all_tools
 CLAUDE_MODEL = 'bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
 OPENAI_MODEL = 'o3-mini-2025-01-31'
 
-def process_tool_call(tools_dict, tool_name, tool_input):
+class InvalidToolInput(ValueError):
+    pass
+
+
+def normalize_bash_tool_input(value):
+    # Normalize only the observed string representation, and only for bash.
+    if isinstance(value, str):
+        if not value.strip():
+            raise InvalidToolInput("bash command must not be empty")
+        return {"command": value}
+
+    if not isinstance(value, dict):
+        raise InvalidToolInput("bash input must be a command object or non-empty string")
+    if set(value) != {"command"}:
+        raise InvalidToolInput("bash input object must contain only 'command'")
+    command = value["command"]
+    if not isinstance(command, str) or not command.strip():
+        raise InvalidToolInput("bash command must be a non-empty string")
+    return value
+
+
+def process_tool_call_b0(tools_dict, tool_name, tool_input):
+    # Preserve the original dispatcher as the unmodified B0 reference.
     try:
         if tool_name in tools_dict:
             return tools_dict[tool_name]['function'](**tool_input)
@@ -21,6 +43,22 @@ def process_tool_call(tools_dict, tool_name, tool_input):
             return f"Error: Tool '{tool_name}' not found"
     except Exception as e:
         return f"Error executing tool '{tool_name}': {str(e)}"
+
+
+def process_tool_call_c1(tools_dict, tool_name, tool_input):
+    # Candidate dispatcher: normalize the known string form for bash only.
+    try:
+        if tool_name not in tools_dict:
+            return f"Error: Tool '{tool_name}' not found"
+        if tool_name == "bash":
+            tool_input = normalize_bash_tool_input(tool_input)
+        return tools_dict[tool_name]['function'](**tool_input)
+    except Exception as e:
+        return f"Error executing tool '{tool_name}': {str(e)}"
+
+
+# Promote C1 after its controlled unit and container-backed gates passed.
+process_tool_call = process_tool_call_c1
 
 @backoff.on_exception(
     backoff.expo,
