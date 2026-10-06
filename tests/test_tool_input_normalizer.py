@@ -127,14 +127,30 @@ def test_b0_nested_payload_is_not_silently_rewritten():
     assert bash.calls == [{"nested": "echo X"}]
 
 
-def test_production_dispatcher_is_promoted_to_c1():
-    assert process_tool_call is process_tool_call_c1
+def test_default_dispatcher_preserves_b0_control(monkeypatch):
+    monkeypatch.delenv("ECODE_TOOL_PROMPT_PROFILE", raising=False)
+    bash = BashSpy()
+
+    result = process_tool_call({"bash": {"function": bash}}, "bash", "echo X")
+
+    assert result.startswith("Error executing tool 'bash':")
+    assert bash.calls == []
 
 
-def test_production_dispatcher_normalizes_bash_string():
+def test_c1_dispatcher_is_selected_by_same_treatment_profile(monkeypatch):
+    monkeypatch.setenv("ECODE_TOOL_PROMPT_PROFILE", "C1")
     bash = BashSpy()
 
     result = process_tool_call({"bash": {"function": bash}}, "bash", "echo X")
 
     assert result == "BASH_CALLED"
     assert bash.calls == ["echo X"]
+
+
+def test_invalid_treatment_fails_closed_before_dispatch(monkeypatch):
+    monkeypatch.setenv("ECODE_TOOL_PROMPT_PROFILE", "UNKNOWN")
+    bash = BashSpy()
+
+    with pytest.raises(ValueError, match="must be B0 or C1"):
+        process_tool_call({"bash": {"function": bash}}, "bash", {"command": "echo X"})
+    assert bash.calls == []
