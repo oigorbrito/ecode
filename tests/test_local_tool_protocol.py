@@ -6,6 +6,11 @@ from llm_withtools import check_for_tool_use, process_tool_call
 from tools.edit import tool_function
 
 
+@pytest.fixture(autouse=True)
+def select_c1_treatment(monkeypatch):
+    monkeypatch.setenv("ECODE_TOOL_PROMPT_PROFILE", "C1")
+
+
 @pytest.mark.parametrize("value", [
     "candidate.py", "view candidate.py", "edit /tmp/fixture/candidate.py",
     "def add_one(value):\n    return value + 1",
