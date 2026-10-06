@@ -1,6 +1,0 @@
-{
-  "name": "ECode — Evolutionary Coding Agent Platform",
-  "description": "Interactive platform for evolutionary, self-improving coding agents with lineage trees, benchmark evaluations, mutation explorers, and provenance tracking.",
-  "requestFramePermissions": [],
-  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

@@ -24,6 +24,8 @@ export ECODE_OPENAI_API_KEY='local'
 
 Use the server's OpenAI-compatible `/v1` base URL and a model identifier it accepts. Common defaults are `http://host.docker.internal:8080/v1` for llama.cpp server, `http://host.docker.internal:11434/v1` for Ollama, and `http://host.docker.internal:1234/v1` for LM Studio. This single contract is intended for all three; it adds no provider-specific integration. The local endpoint must be reachable from the Docker container running the coding agent. Adapter support is not, by itself, qualification of any server/model combination.
 
+For explicit, read-only observation of Ollama's loaded context during a coding-agent run, set `ECODE_OLLAMA_API_BASE_URL` to the Ollama API root (for example, `http://host.docker.internal:11434`). ECode then queries Ollama `GET /api/ps` after each completion and records a context length only when exactly one loaded model name matches the response model. This setting does not select or replace the completion endpoint. Without it, the effective context is recorded as not observed. No declared model context is substituted for the loaded runtime value.
+
 When `ECODE_OPENAI_BASE_URL` is set, the coding-agent container receives only the `ECODE_OPENAI_*` settings; cloud provider credentials are not forwarded on that path. Without it, the existing legacy provider credentials are passed as before. This routes model calls explicitly and does not add a provider fallback.
 
 Verify Docker is available:
@@ -88,7 +90,7 @@ Migration status: `ecode_core` owns the new contracts and loop; `ecode.py --engi
 
 ## Empirical migration policy
 
-The donor-by-donor plan, evidence gates, intended experiment order, and current bootstrap status are recorded in [`docs/ROADMAP.md`](docs/ROADMAP.md). No upstream benchmark result is an ECode pass or migration authorization. Current local fixtures do not qualify a model, provider, benchmark, or performance claim.
+The current empirical plan, qualification gates and local status are recorded in [`docs/ROADMAP.md`](docs/ROADMAP.md). Earlier donor-specific plans are preserved in [`docs/ROADMAP-BOOTSTRAP-HISTORY.md`](docs/ROADMAP-BOOTSTRAP-HISTORY.md). Agent instructions are in [`AGENTS.md`](AGENTS.md). Reusable development skills and specialized role boundaries are documented in [`docs/DEVELOPMENT-AGENTS.md`](docs/DEVELOPMENT-AGENTS.md). No upstream result is an ECode pass or migration authorization. Real-model mutation and orchestration have passed controlled synthetic fixture gates; real-repository repair remains unqualified (0/5 verified repairs in the localized editing experiment). Wave 0 remains incomplete. No benchmark, performance gain or SWE capability is claimed.
 
 **License status:** this repository has no selected project license (`LICENSE-SELECT.md` is retained from the canonical repository). Source revisions considered during migration are tracked internally in `docs/donors/` for reproducibility; this is not a product credit list.
 

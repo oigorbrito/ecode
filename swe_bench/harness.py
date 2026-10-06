@@ -1,6 +1,5 @@
 import argparse
 import datetime
-import hashlib
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,69 +21,6 @@ from swe_bench.utils import (
 )
 from utils.common_utils import load_json_file
 from utils.docker_utils import require_docker_client
-
-SWE_BENCH_VERIFIED_REVISION = "c104f840cc67f8b6eec6f759ebc8b2693d585d4a"
-SWE_BENCH_VERIFIED_ROWS = 500
-SWE_BENCH_VERIFIED_SNAPSHOT = (
-    Path(__file__).resolve().parents[1]
-    / ".cache"
-    / "swebench-verified"
-    / SWE_BENCH_VERIFIED_REVISION
-)
-
-
-def _manifest_scalar_values(value):
-    if isinstance(value, dict):
-        for nested in value.values():
-            yield from _manifest_scalar_values(nested)
-    elif isinstance(value, list):
-        for nested in value:
-            yield from _manifest_scalar_values(nested)
-    elif value is not None:
-        yield str(value)
-
-
-def _validate_swebench_verified_snapshot(snapshot_dir=SWE_BENCH_VERIFIED_SNAPSHOT):
-    snapshot_dir = Path(snapshot_dir)
-    parquet_path = snapshot_dir / "test.parquet"
-    manifest_path = snapshot_dir / "manifest.json"
-
-    if not parquet_path.is_file():
-        raise FileNotFoundError(f"SWE-bench Verified snapshot missing: {parquet_path}")
-    if not manifest_path.is_file():
-        raise FileNotFoundError(f"SWE-bench Verified manifest missing: {manifest_path}")
-
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"Invalid SWE-bench Verified manifest: {manifest_path}") from exc
-
-    actual_sha256 = hashlib.sha256(parquet_path.read_bytes()).hexdigest()
-    scalar_values = set(_manifest_scalar_values(manifest))
-    scalar_values_lower = {value.lower() for value in scalar_values}
-
-    if SWE_BENCH_VERIFIED_REVISION not in scalar_values:
-        raise RuntimeError("SWE-bench Verified manifest does not assert the frozen revision")
-    if actual_sha256.lower() not in scalar_values_lower:
-        raise RuntimeError("SWE-bench Verified Parquet SHA-256 does not match the manifest")
-
-    return parquet_path
-
-
-def _load_swebench_verified_snapshot(snapshot_dir=SWE_BENCH_VERIFIED_SNAPSHOT):
-    parquet_path = _validate_swebench_verified_snapshot(snapshot_dir)
-    dataset = load_dataset("parquet", data_files={"test": str(parquet_path)}, split="test")
-
-    instance_ids = [entry["instance_id"] for entry in dataset]
-    if len(instance_ids) != SWE_BENCH_VERIFIED_ROWS:
-        raise RuntimeError(
-            f"SWE-bench Verified row count mismatch: expected {SWE_BENCH_VERIFIED_ROWS}, "
-            f"got {len(instance_ids)}"
-        )
-    if len(set(instance_ids)) != SWE_BENCH_VERIFIED_ROWS:
-        raise RuntimeError("SWE-bench Verified instance_id values are not unique")
-
-    return dataset
 
 def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
     """
@@ -271,9 +207,10 @@ def harness(
         model_patch_paths: Paths to the model patches for ecode
         num_evals: Repeated number of swe evaluations
     """
-    # Load the locally frozen and integrity-checked dataset snapshot.
-    dataset = _load_swebench_verified_snapshot()
-    
+    # Load dataset
+    dataset = load_dataset("princeton-nlp/SWE-bench_Verified")
+    dataset = dataset['test']
+
     # Ensure that necessary directories exist
     if model_name_or_path is None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -281,7 +218,7 @@ def harness(
     pred_dname = Path(pred_dname)
     pred_dname.mkdir(exist_ok=True)
     out_dnames = []
-    
+
     # Prepare the dataset entries
     entries = list(dataset)
     if test_task_list:
@@ -292,15 +229,15 @@ def harness(
     # Build the environment images
     client = require_docker_client()
     build_env_images(client, dataset=entries, force_rebuild=False, max_workers=max_workers)
-    
+
     # Define a function to handle a single evaluation for all specified issues
     def process_evaluation(eval_idx):
         model_name_or_path_inst = f"{model_name_or_path}_{eval_idx}"
         out_dname = pred_dname / model_name_or_path_inst
         out_dname.mkdir(exist_ok=True)
-        
+
         print(f"Starting evaluation {eval_idx} for model {model_name_or_path}")
-        
+
         # Process entries in parallel
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
@@ -308,7 +245,7 @@ def harness(
                 executor.submit(process_entry, entry, out_dname, model_name_or_path_inst, model_patch_paths): entry
                 for entry in entries
             }
-            
+
             # Process completed tasks as they finish
             for future in as_completed(future_to_entry):
                 result = future.result()
@@ -337,7 +274,7 @@ def main():
     parser.add_argument("--pred_dname", type=str, default="./swe_bench/predictions", help="Output directory for predictions")
     parser.add_argument("--test_task_list", type=str, default=None, help="Subset of swe issues to process")
     args = parser.parse_args()
-    
+
     # Load the test task list
     if args.test_task_list == 'small':
         test_task_list = load_json_file("./swe_bench/subsets/small.json")

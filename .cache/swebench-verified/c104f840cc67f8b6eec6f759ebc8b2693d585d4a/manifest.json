@@ -1,6 +1,0 @@
-{
-  "dataset": "princeton-nlp/SWE-bench_Verified",
-  "split": "test",
-  "revision": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
-  "sha256": "7365391dc3aa563c0800b4a6d8826a2bd2f2db8f9e405132fbe309452f24c713"
-}
