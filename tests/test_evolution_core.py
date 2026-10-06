@@ -326,6 +326,96 @@ def test_ecode_evaluator_can_convert_cached_metadata_without_running_harness():
     assert result.segment == "verified-small"
 
 
+def test_ecode_evaluator_resolves_relative_candidate_against_artifact_root_not_cwd(tmp_path, monkeypatch):
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    candidate = artifact_dir / "candidate.patch"
+    candidate.write_text("correct candidate\n", encoding="utf-8")
+    candidate_hash = hashlib.sha256(candidate.read_bytes()).hexdigest()
+
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    (cwd / "candidate.patch").write_text("shadow candidate\n", encoding="utf-8")
+    monkeypatch.chdir(cwd)
+
+    agent = AgentVersion(
+        version_id="relative-agent",
+        parent_id=None,
+        commit_sha=None,
+        candidate_sha256=candidate_hash,
+        config_sha256="config-1",
+        artifact=ArtifactRef("candidate.patch", candidate_hash, "text/x-diff"),
+    )
+    context = EvaluationContext(
+        run_id="relative-run",
+        commit_sha=None,
+        config_sha256="config-1",
+        model="fixture-model",
+        provider="none",
+        benchmark="fixture",
+        segment="fixture-v1",
+        artifact_dir=artifact_dir,
+        seed=1,
+    )
+
+    result = ECodeEvaluator.from_metadata(
+        agent,
+        context,
+        {"status": "COMPLETED", "overall_performance": {"accuracy_score": 1.0}},
+    )
+
+    assert result.artifacts[0].path == str(candidate)
+    assert result.artifacts[0].sha256 == candidate_hash
+
+
+def test_ecode_evaluator_preserves_distinct_directory_artifact_identities(tmp_path):
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    candidate = artifact_dir / "candidate.patch"
+    candidate.write_text("candidate\n", encoding="utf-8")
+    candidate_hash = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    for name in ("first", "second"):
+        directory = artifact_dir / name
+        directory.mkdir()
+        (directory / "same.txt").write_text("same\n", encoding="utf-8")
+
+    agent = AgentVersion(
+        version_id="directory-agent",
+        parent_id=None,
+        commit_sha=None,
+        candidate_sha256=candidate_hash,
+        config_sha256="config-1",
+        artifact=ArtifactRef("candidate.patch", candidate_hash, "text/x-diff"),
+    )
+    context = EvaluationContext(
+        run_id="directory-run",
+        commit_sha=None,
+        config_sha256="config-1",
+        model="fixture-model",
+        provider="none",
+        benchmark="fixture",
+        segment="fixture-v1",
+        artifact_dir=artifact_dir,
+        seed=1,
+    )
+
+    result = ECodeEvaluator.from_metadata(
+        agent,
+        context,
+        {
+            "status": "COMPLETED",
+            "overall_performance": {
+                "accuracy_score": 1.0,
+                "files": ["first", "second"],
+            },
+        },
+    )
+
+    directory_refs = [ref for ref in result.artifacts if ref.media_type == "application/x-directory"]
+    assert [Path(ref.path).name for ref in directory_refs] == ["first", "second"]
+    assert directory_refs[0].sha256 == directory_refs[1].sha256
+
+
 def test_ecode_evaluator_does_not_turn_blocked_score_into_evidence():
     artifact_dir = (Path(".provenance") / f"pytest-blocked-evaluator-{uuid4().hex}").resolve()
     artifact_dir.mkdir(parents=True)
