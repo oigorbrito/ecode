@@ -7,7 +7,7 @@ import openai
 import copy
 
 from llm import create_client, get_response_from_llm, resolve_model
-from prompts.tooluse_prompt import get_tooluse_prompt
+from prompts.tooluse_prompt import get_tool_protocol_profile, get_tooluse_prompt
 from tools import load_all_tools
 
 CLAUDE_MODEL = 'bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
@@ -58,8 +58,11 @@ def process_tool_call_c1(tools_dict, tool_name, tool_input):
         return f"Error executing tool '{tool_name}': {str(e)}"
 
 
-# Promote C1 after its controlled unit and container-backed gates passed.
-process_tool_call = process_tool_call_c1
+def process_tool_call(tools_dict, tool_name, tool_input):
+    """Dispatch through the same frozen Arena-1 treatment selected for the prompt."""
+    if get_tool_protocol_profile() == "B0":
+        return process_tool_call_b0(tools_dict, tool_name, tool_input)
+    return process_tool_call_c1(tools_dict, tool_name, tool_input)
 
 @backoff.on_exception(
     backoff.expo,
